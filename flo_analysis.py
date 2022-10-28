@@ -8,6 +8,11 @@ import decimal
 
 
 # default variables
+position_gate = 2.95 
+position_cathode = 42.06
+
+sigma_position_gate = .2
+sigma_position_cathode = .3
 
 
 
@@ -284,7 +289,9 @@ def correct_s2(kr, lifetime):
 def lin(x, a, c):
     return(a*x + c)
     
-def corr_lin(x, y, a, c, t0 = 22, t_start = 5, t_end = 39):
+def corr_lin(x, y, a, c, t_start = position_gate, t_end = position_cathode):
+    
+    t0 = (t_start + t_end)/2
     
     y_corr = y * 1
     y_calc = y / lin(x, a, c)*lin(t0, a, c)
@@ -304,21 +311,28 @@ def correct_s1(kr, s1_corr_pars):
     return(None)
     
 
-def plot_binned(ax, x, y, bins = 10, marker = ".", label = "", eb_1 = False, eb_2 = False):
-    cbc, cmedian, cmd_sd, cmd_unc = get_binned_data(x, y, bins=bins)
+def plot_binned(ax, x, y, bins = 10, marker = ".", label = "", eb_1 = False, eb_2 = False, x_max_plot=False, *args, **kwargs):
     
+    cbc, cmedian, cmd_sd, cmd_unc = get_binned_data(x, y, bins=bins, *args, **kwargs)
+    
+    if x_max_plot is not False:
+        _, cbc_p, cmedian_p, cmd_sd_p, cmd_unc_p = fhist.remove_zero(cbc <= x_max_plot, cbc, cmedian, cmd_sd, cmd_unc)
+    else:
+        cbc_p, cmedian_p, cmd_sd_p, cmd_unc_p = cbc, cmedian, cmd_sd, cmd_unc
+        
+        
     if ax is not False:
-        _ = ax.plot(cbc, cmedian, ".", label = label, marker= marker)[0]
+        _ = ax.plot(cbc_p, cmedian_p, ".", label = label, marker= marker)[0]
         if eb_1 is True:
-            fhist.errorbar(ax, cbc, cmedian, cmd_unc, color = _.get_color())
+            fhist.errorbar(ax, cbc_p, cmedian_p, cmd_unc_p, color = _.get_color())
         if eb_2 is True:
-            fhist.errorbar(ax, cbc, cmedian, cmd_sd, color = _.get_color(), alpha= .25)
+            fhist.errorbar(ax, cbc_p, cmedian_p, cmd_sd_p, color = _.get_color(), alpha= .25)
     
     return(cbc, cmedian, cmd_sd, cmd_unc)
 
 
 
-def get_binned_data(dt, area, bins, n_counts_min=2, nresults_min=2):
+def get_binned_data(dt, area, bins, n_counts_min=2, nresults_min=2, *args, **kwargs):
     '''
     helper function for get_e_lifetime_from_run
     
@@ -432,23 +446,45 @@ the lifetime plus uncertainty (in  µs)
     
     
     
+
     
-    
-def fit_s1_field(kr, field, bins_dt, ax = False, t_start = 5, t_end = 39):
+def fit_s1_field(kr, field, bins_dt, ax = False,
+    t_start = position_gate, t_end = position_cathode,
+    cut_after_cathode = 10,
+    *args, **kwargs
+):
     '''
     performs a S1 calibration on "field" (s1, s11 or s12)
     
+    cut_at_cathod: remove values after cut_after_cathode µs after cahode (default = 10)
+    (just for plotting)
+    
     '''
+    
+    
     t0 = (t_start + t_end)/2
+    
+    
+    kr_ = kr.copy()
+    t_max = False
+    if cut_after_cathode is not False:
+        t_max = position_cathode + cut_after_cathode
+        # print(f"cutting dt at {t_max:.2f}")
+        
+    
+    
     
     x, y, sdy, sy = plot_binned(
         ax, kr["time_drift"], kr[f"area_{field}"], label = f"uncorrected (n={len(kr)})", bins=bins_dt,
-        eb_1 = True, eb_2 = True
-        
+        eb_1 = True, eb_2 = True,
+        x_max_plot = t_max,
+        *args, **kwargs
     )
     
     
+    
     _, xf, yf, syf = fhist.remove_zero((x >= t_start) & (x <= t_end), x, y, sy)
+    
     
     
     
@@ -468,10 +504,10 @@ def fit_s1_field(kr, field, bins_dt, ax = False, t_start = 5, t_end = 39):
     
     chi2 = fhist.chi_sqr(lin, xf, yf, syf, *fit)
 
-    xc = np.linspace(xf[0], xf[-1], 1000)
+    xc = np.linspace(t_start, t_end, 1000)
     ycf = lin(xc, *fit)
     
-    corr_pars = (*fit, t0, t_start, t_end)
+    corr_pars = (*fit, t_start, t_end)
 
     if ax is not False:
         ax.set_title(field.upper())
@@ -489,9 +525,11 @@ def fit_s1_field(kr, field, bins_dt, ax = False, t_start = 5, t_end = 39):
         
         # correcting (just for plotting)
         kr[f"c{field.upper()}"] = corr_lin(kr["time_drift"], kr[f"area_{field}"], *corr_pars)
+        
         xc, yc, sdyc, syc = plot_binned(
             ax, kr["time_drift"], kr[f"c{field.upper()}"], label = f"corrected (n={len(kr)})", bins=bins_dt,
-            eb_1 = True, eb_2 = False
+            eb_1 = True, eb_2 = False,
+            x_max_plot = t_max,
 
         )
         

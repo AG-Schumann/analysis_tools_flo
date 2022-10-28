@@ -2,7 +2,7 @@ import sys
 import os
 from datetime import datetime
 from flo_analysis import *
-
+import flo_decorators
 
 
 # import 
@@ -215,6 +215,7 @@ def get_krskru(kr):
     kru = kr[~kr["s2_split"]]
     return(kr[kr["s2_split"]], kr[~kr["s2_split"]])
 
+@flo_decorators.silencer
 def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, context = context_sp, calibrate = True):
     '''
     returns sp_krypton and calibration data of runs

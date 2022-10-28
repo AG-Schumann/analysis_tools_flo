@@ -29,7 +29,23 @@ label_tau_kr_lit = f"$\\tau = ({tau_kr_lit:.1f} \\pm {stau_kr_lit:.1f})$ ns"
 
 
 
-
+def make_fig(nrows=1, ncols=1, w=6, h=4, rehape_ax = True, *args, **kwargs):
+    '''
+    creates a figure with nrows by ncols plots
+    set its size to w*ncols and  h*nrows
+    returns fig and reshapen ax (as 1d list) elements
+    '''
+    
+    fig, axs = plt.subplots(nrows, ncols, *args, **kwargs)
+    fig.set_size_inches(ncols*w, nrows*h, *args, **kwargs)
+    
+    if rehape_ax is True:
+        if isinstance(axs, plt.Axes):
+            axs = np.array([axs])
+        else:
+            axs = axs.reshape(-1)
+            
+    return(fig, axs)
 
 
 
