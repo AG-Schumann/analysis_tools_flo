@@ -51,10 +51,21 @@ def make_fig(nrows=1, ncols=1, w=6, h=4, rehape_ax = True, *args, **kwargs):
 
 def addlabel(ax, label, color = "black", linestyle = "", marker = "", *args, **kwargs):
     ax.plot([], [], label = label, color = color, linestyle=linestyle, marker=marker, *args, **kwargs)
-def errorbar(ax, x, y, sy, color = "black", capsize = 5, linestyle = "", label = "", marker = "", *args, **kwargs):
+
+def errorbar(
+    ax, x, y, sy,
+    color = None, capsize = 5,
+    linestyle = "", label = "",
+    marker = "", plot = False,
+    *args, **kwargs):
+    
+    if plot is True:
+        color = ax.plot(x, y, marker = ".", color = color, linestyle = linestyle, label = label,  *args, **kwargs)[0].get_color()
+        label = None
+    
     ax.errorbar(x, y, sy, label = label, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
 
-
+    
 
 
 

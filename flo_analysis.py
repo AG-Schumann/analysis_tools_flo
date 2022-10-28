@@ -18,17 +18,18 @@ sigma_position_cathode = .3
 
 bw_drift = 2
 bw_drift_aa = 1 # aa = above anode
-t_drift_end_anode = 5
+
 bins_drift = np.arange(-bw_drift/2, 60+bw_drift/2, bw_drift)
 bins_drift = np.arange(-bw_drift/2, 60+bw_drift/2, bw_drift)
 
 default_bins = {
     "drifttime_all": bins_drift,
 }
-default_bins["drifttime_below_anode"] = bins_drift[bins_drift > t_drift_end_anode]
-default_bins["drifttime_above_anode"] = np.arange(-bw_drift_aa/2, t_drift_end_anode+bw_drift_aa*2/3, bw_drift_aa)
+default_bins["drifttime_below_anode"] = bins_drift[bins_drift > position_gate]
+default_bins["drifttime_above_anode"] = np.arange(-bw_drift_aa/2, position_gate+bw_drift_aa*2/3, bw_drift_aa)
 default_bins["drifttime_fine"] = np.arange(-bw_drift_aa/2, 40+bw_drift_aa*2/3, bw_drift_aa)
-default_bins["drifttime"] = default_bins["drifttime_below_anode"]
+
+default_bins["drifttime"] = np.arange(-.5, position_cathode-1, 1)
 
 
 
