@@ -112,7 +112,7 @@ def add_fit_parameter(ax, l, p, sp=np.inf, u="", fmt =".1f"):
 
 def median(x, percentile = 68.2):
     med = np.median(x)
-    mad = np.percentile(x - med, percentile)
+    mad = np.percentile(np.abs(x - med), percentile)
     unc_med = mad/len(x)**.5
     
     return(med, mad, unc_med)
@@ -162,7 +162,7 @@ def median_w(
     med = np.interp(thr, c_wx[ids], x[ids])
 
 
-    mad = np.percentile(x - med, percentile)
+    mad = np.percentile(np.abs(x - med), percentile)
     unc_med = mad/len(x)**.5
 
     return(med, mad, unc_med)

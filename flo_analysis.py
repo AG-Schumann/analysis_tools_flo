@@ -29,7 +29,7 @@ default_bins["drifttime_below_anode"] = bins_drift[bins_drift > position_gate]
 default_bins["drifttime_above_anode"] = np.arange(-bw_drift_aa/2, position_gate+bw_drift_aa*2/3, bw_drift_aa)
 default_bins["drifttime_fine"] = np.arange(-bw_drift_aa/2, 40+bw_drift_aa*2/3, bw_drift_aa)
 
-default_bins["drifttime"] = np.arange(-.5, position_cathode-1, 1)
+default_bins["drifttime"] = np.arange(position_gate+1, position_cathode-1, 1)
 
 
 
