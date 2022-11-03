@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from flo_analysis import *
 import flo_decorators
-
+from threading import Thread, Event
 
 # import 
 sys.path.insert(0,"/data/workspace/Flo/straxbra_flo/strax")
@@ -78,6 +78,15 @@ print(f"\33[32mImport done at {datetime.now()}\33[0m")
 
 
 mycol = db["calibration_info"]
+
+def db_dict():
+    return(
+        {f["run"]:f for f in mycol.find({})}
+    )
+
+
+
+
 
 def draw_kr_event(ax, event, show_peaks = "0123", show_peaktime = False, leg_loc = False, t_ref = 0, **kwargs):
     '''
@@ -216,7 +225,7 @@ def get_krskru(kr):
     return(kr[kr["s2_split"]], kr[~kr["s2_split"]])
 
 @flo_decorators.silencer
-def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, context = context_sp, calibrate = True):
+def load_run_kr_old(runs, config = False, gs = False, W = 13.5, peaks = False, context = context_sp, calibrate = True):
     '''
     returns sp_krypton and calibration data of runs
     set peaks = true to also get peaks signals 
@@ -246,19 +255,28 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
     calibration = False
     
     if calibrate is True:
+        out = None
+        
         calibration = get_calibration_data(run)
         if len(calibration) == 0:
             print("no calibration data found")
-            return(None)
+            calibration = False
         if len(calibration) > 1:
             print(f"multiple calibration data found: {len(calibration)}")
             calibration = calibration[0]
+        elif len(calibration) == 1:
+            calibration = calibration[0]
+        
+        
         
         # corrections function from flo_analysis.py
-        if calibration is False:
+        if calibration is not False:
+            print("correcting S1 & S2")
             correct_s1(sp, calibration["s1_corr_pars"])
             correct_s2(sp, lifetime = calibration["elifetime"])
-    
+        else:
+            print("\33[31mNo automatic S1 & S2 correction!\33[0m")
+            
         if gs is not False:
             sp["energy_s1"] = sp["cS1"] / gs[0] * W
             sp["energy_s2"] = sp["cS2"] / gs[1] * W
@@ -281,6 +299,118 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
     print(f"all done in {t_end - t_start}")
         
     return(sp, calibration, peaks)
+
+@flo_decorators.silencer
+def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, context = context_sp, calibrate = True):
+    '''
+    returns sp_krypton and calibration data of runs
+    set peaks = true to also get peaks signals 
+    
+    calibration data of first run in runs is used for all
+    '''
+    t_start = datetime.now()
+    if config is False:
+        config = default_config
+    
+    
+    if isinstance(runs, int):
+        runs = [runs]
+    runs_str = [f"{r:0>5}" for r in runs]
+
+    print(runs_str)
+
+    print("start loading data")    
+    sp = context.get_array(runs_str, "sp_krypton", config = config)
+    print("loading done")
+    sp = sp[sp["is_event"]]
+
+    
+    calibration = False
+    if calibrate is True:
+        db = list(mycol.find({"run":{"$in": runs}}))
+        db_dict = {db_i["run"]:db_i for db_i in db}
+        calibration = db_dict
+        if "run_id" not in sp.dtype.names:
+            # correct only one
+            print("correcting single run")
+            correct_s1(sp, db[0]["s1_corr_pars"])
+            correct_s2(sp, lifetime = db[0]["elifetime"])
+            
+        else:
+            runs_found = np.unique(sp["run_id"])
+            # correct multiple
+            print("correcting multple runs", end = ", ")
+
+            out = None
+            for run in runs_found:
+                print(f"{run}", end = ", ")
+                try:
+                    sp_ = sp[sp["run_id"] == run]
+                    calibration = db_dict[run]
+
+                    correct_s1(sp_, calibration["s1_corr_pars"])
+                    correct_s2(sp_, lifetime = calibration["elifetime"])
+                    if out is None:
+                        out = sp_
+                    else:
+                        out = np.append(out, sp_)
+                except Exception as e:
+                    print("\33[31mERROR: {e}\33[0m")
+            sp = out
+        if gs is not False:
+            print("calculating energy")
+            sp["energy_s1"] = sp["cS1"] / gs[0] * W
+            sp["energy_s2"] = sp["cS2"] / gs[1] * W
+            sp["energy_total"] = sp["energy_s1"] + sp["energy_s2"]
+        
+    print("correcting done")
+    
+    
+    
+    
+    if peaks is False:
+        t_end = datetime.now()
+        print(f"all done in {t_end - t_start}")
+        return(sp, calibration)
+        
+        
+    print("start loading peaks")
+    peaks = context.get_array(runs_str, "peaks", config = config)
+    print("loading done, filtering")
+    peaks = peaks[np.in1d(peaks["time"], sp["time_signals"].reshape(-1))]
+    print("filtering done")
+    
+    t_end = datetime.now()
+    print(f"all done in {t_end - t_start}")
+        
+    return(sp, calibration, peaks)
+
+
+
+
+def load_run_kr_quick(*args, max_time = 10, **kwargs):
+    result_mutlithreading = False
+    
+    ret = False
+    
+    def wrapper(*args, **kwargs):
+        nonlocal ret
+        try:
+            ret = load_run_kr(*args, **kwargs)
+        except Exception as e:
+            ret = e
+        
+    
+    
+    action_thread = Thread(target=wrapper, args = args, kwargs=kwargs)
+
+    action_thread.start()
+    action_thread.join(timeout = max_time)
+    
+    
+    return(ret)
+
+
 
 def make_todo(kr):
     '''

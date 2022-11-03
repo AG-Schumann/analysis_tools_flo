@@ -27,7 +27,13 @@ stau_kr_lit = 1.1/np.log(2)
 str_tau_kr_lit = f"τ = ({tau_kr_lit:.1f} ± {stau_kr_lit:.1f}) ns"
 label_tau_kr_lit = f"$\\tau = ({tau_kr_lit:.1f} \\pm {stau_kr_lit:.1f})$ ns"
 
-
+def make_dict(**kwargs):
+    '''
+    a function for lazy people to turn the arguemnts of a fucntion call into a dictionary (via copy paste)
+    '''    
+    return(
+        {n:v for n, v in kwargs.items()}
+    )
 
 def make_fig(nrows=1, ncols=1, w=6, h=4, rehape_ax = True, *args, **kwargs):
     '''
@@ -37,7 +43,7 @@ def make_fig(nrows=1, ncols=1, w=6, h=4, rehape_ax = True, *args, **kwargs):
     '''
     
     fig, axs = plt.subplots(nrows, ncols, *args, **kwargs)
-    fig.set_size_inches(ncols*w, nrows*h, *args, **kwargs)
+    fig.set_size_inches(ncols*w, nrows*h)
     
     if rehape_ax is True:
         if isinstance(axs, plt.Axes):
@@ -52,6 +58,8 @@ def make_fig(nrows=1, ncols=1, w=6, h=4, rehape_ax = True, *args, **kwargs):
 def addlabel(ax, label, color = "black", linestyle = "", marker = "", *args, **kwargs):
     ax.plot([], [], label = label, color = color, linestyle=linestyle, marker=marker, *args, **kwargs)
 
+
+
 def errorbar(
     ax, x, y, sy,
     color = None, capsize = 5,
@@ -60,7 +68,11 @@ def errorbar(
     *args, **kwargs):
     
     if plot is True:
-        color = ax.plot(x, y, marker = ".", color = color, linestyle = linestyle, label = label,  *args, **kwargs)[0].get_color()
+        if marker is not "":
+            marker_plot = marker
+        else:
+            marker_plot = "."
+        color = ax.plot(x, y, marker = marker_plot, color = color, linestyle = linestyle, label = label,  *args, **kwargs)[0].get_color()
         label = None
     
     ax.errorbar(x, y, sy, label = label, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
@@ -110,14 +122,22 @@ def add_fit_parameter(ax, l, p, sp=np.inf, u="", fmt =".1f"):
 
 
 
-def median(x, percentile = 68.2):
-    med = np.median(x)
-    mad = np.percentile(np.abs(x - med), percentile)
-    unc_med = mad/len(x)**.5
+def median(x, percentile = 68.2, clean = True):
+    x_ = np.array(x)*1
+    if clean is True:
+        x_ = x_[np.isfinite(x_)]
+
+    med = np.median(x_)
+    mad = np.percentile(np.abs(x_ - med), percentile)
+    unc_med = mad/len(x_)**.5
     
     return(med, mad, unc_med)
 
-def mean(x, percentile = 68.2):
+def mean(x, percentile = 68.2, clean = True):
+    x_ = np.array(x)*1
+    if clean is True:
+        x_ = x_[np.isfinite(x_)]
+
     med = np.mean(x)
     mad = np.std(x, ddof = 1)
     unc_med = mad/len(x)**.5
@@ -129,7 +149,7 @@ def median_w(
     x,
     sx,
     percentile = 68.2,
-    percentile_med = 50,
+    percentile_med = 50
 ):
     '''
     returns the weighted median for x with uncertainty sx
@@ -193,12 +213,12 @@ def count(x):
     
     
 
-def chi_sqr(f, x, y, s_y, *pars):
+def chi_sqr(f, x, y, s_y, *pars, ndf = False):
     '''
     returns a tuple with chi^2, ndf and reduced chi^2
     '''
-    
-    ndf = len(x) - len(pars)
+    if ndf is False:
+        ndf = len(x) - len(pars)
     
     x = np.array(x)
     y = np.array(y)
@@ -605,6 +625,7 @@ def sort(x, *args):
 def remove_zero(x, *args):
     '''
     takes arbitraly many arrays and keeps only entries where x is not zero
+    returns the filtered values each as np.array
     '''
     idx_keep = np.nonzero(x)
     x = np.array(x)[idx_keep]

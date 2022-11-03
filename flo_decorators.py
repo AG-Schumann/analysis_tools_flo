@@ -1,11 +1,14 @@
 import sys
+from functools import wraps
+# import this to keep docstrings intact
+
 
 def silencer(f):
     '''
     decorator that adds argument "silent" to function:
     if set to True: sets the stdout to dev/null during call    
     '''
-
+    @wraps(f)
     def wrapper(*args, silent = False, **kwargs):
         ret = None
         sys_stdout = sys.stdout

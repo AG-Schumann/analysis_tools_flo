@@ -18,9 +18,12 @@ sigma_position_cathode = .3
 
 bw_drift = 2
 bw_drift_aa = 1 # aa = above anode
+bw_s1_dt = .5
+bw_s2_area = 200
 
 bins_drift = np.arange(-bw_drift/2, 60+bw_drift/2, bw_drift)
 bins_drift = np.arange(-bw_drift/2, 60+bw_drift/2, bw_drift)
+
 
 default_bins = {
     "drifttime_all": bins_drift,
@@ -30,6 +33,10 @@ default_bins["drifttime_above_anode"] = np.arange(-bw_drift_aa/2, position_gate+
 default_bins["drifttime_fine"] = np.arange(-bw_drift_aa/2, 40+bw_drift_aa*2/3, bw_drift_aa)
 
 default_bins["drifttime"] = np.arange(position_gate+1, position_cathode-1, 1)
+default_bins["full_range_s1"] = np.arange(-20*bw_s1_dt/2, 100+2/3*bw_s1_dt, bw_s1_dt)
+default_bins["area_S2"] = np.arange(-bw_s2_area/2, 8000+bw_s2_area*3/2, bw_s2_area)
+
+
 
 
 
@@ -361,7 +368,7 @@ def get_binned_data(dt, area, bins, n_counts_min=2, nresults_min=2, *args, **kwa
         return(np.array([]), np.array([]), np.array([]), np.array([]))
 
 
-def get_e_lifetime_from_run(kr, ax = False, bins = None):
+def get_e_lifetime_from_run(kr, ax = False, bins = None, field = "area_s2", *args, **kwargs):
     '''
 calculates the electron lifetime of a run based on the uncorrected S2 area and the drift time
 
@@ -386,14 +393,13 @@ the lifetime plus uncertainty (in  µs)
     if bins is None:
         bins = default_bins["drifttime"]
 
-    bc, median, md_sd, md_unc = get_binned_data(kr["time_drift"], kr["area_s2"], bins)
+    bc, median, md_sd, md_unc = get_binned_data(kr["time_drift"], kr[field], bins)
     
     
     
     # select what info to use for fit
     xf, yf, syf = bc, median, md_unc
     
-
     p0 = [median[0], 100, 0]
 
     fit, cov = curve_fit(
