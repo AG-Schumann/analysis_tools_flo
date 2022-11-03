@@ -35,7 +35,7 @@ def make_dict(**kwargs):
         {n:v for n, v in kwargs.items()}
     )
 
-def make_fig(nrows=1, ncols=1, w=6, h=4, rehape_ax = True, *args, **kwargs):
+def make_fig(nrows=1, ncols=1, w=6, h=4, reshape_ax = True, *args, **kwargs):
     '''
     creates a figure with nrows by ncols plots
     set its size to w*ncols and  h*nrows
@@ -45,7 +45,7 @@ def make_fig(nrows=1, ncols=1, w=6, h=4, rehape_ax = True, *args, **kwargs):
     fig, axs = plt.subplots(nrows, ncols, *args, **kwargs)
     fig.set_size_inches(ncols*w, nrows*h)
     
-    if rehape_ax is True:
+    if reshape_ax is True:
         if isinstance(axs, plt.Axes):
             axs = np.array([axs])
         else:

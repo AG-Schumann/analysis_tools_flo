@@ -18,7 +18,7 @@ sigma_position_cathode = .3
 
 bw_drift = 2
 bw_drift_aa = 1 # aa = above anode
-bw_s1_dt = .5
+bw_s1_dt = 2
 bw_s2_area = 200
 
 bins_drift = np.arange(-bw_drift/2, 60+bw_drift/2, bw_drift)
