@@ -545,7 +545,7 @@ def fit_exp(x, y, offset = -1, meta = False, C0 = True, params = None):
     if params is None:
         params = {}
     if C0:
-        params = {"bounds": ((-np.inf, -np.inf, 0),(np.inf, np.inf, 0))}
+        params = {"bounds": ((-np.inf, -np.inf, -1),(np.inf, np.inf, 0))}
     fit, cov = scipy.optimize.curve_fit(
                 exp_decay,
                 x,

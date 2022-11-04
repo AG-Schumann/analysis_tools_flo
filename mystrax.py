@@ -323,7 +323,7 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
     sp = context.get_array(runs_str, "sp_krypton", config = config)
     print("loading done")
     sp = sp[sp["is_event"]]
-
+    db_dict = False
     
     calibration = False
     if calibrate is True:
@@ -371,7 +371,7 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
     if peaks is False:
         t_end = datetime.now()
         print(f"all done in {t_end - t_start}")
-        return(sp, calibration)
+        return(sp, db_dict)
         
         
     print("start loading peaks")
@@ -383,14 +383,12 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
     t_end = datetime.now()
     print(f"all done in {t_end - t_start}")
         
-    return(sp, calibration, peaks)
+    return(sp, db_dict, peaks)
 
 
 
 
 def load_run_kr_quick(*args, max_time = 10, **kwargs):
-    result_mutlithreading = False
-    
     ret = False
     
     def wrapper(*args, **kwargs):

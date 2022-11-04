@@ -10,6 +10,8 @@ import decimal
 # default variables
 position_gate = 2.95 
 position_cathode = 42.06
+S1_correction_window = (4, 40)
+
 
 sigma_position_gate = .2
 sigma_position_cathode = .3
@@ -19,6 +21,7 @@ sigma_position_cathode = .3
 bw_drift = 2
 bw_drift_aa = 1 # aa = above anode
 bw_s1_dt = 2
+bw_s1_area = 20
 bw_s2_area = 200
 
 bins_drift = np.arange(-bw_drift/2, 60+bw_drift/2, bw_drift)
@@ -35,7 +38,7 @@ default_bins["drifttime_fine"] = np.arange(-bw_drift_aa/2, 40+bw_drift_aa*2/3, b
 default_bins["drifttime"] = np.arange(position_gate+1, position_cathode-1, 1)
 default_bins["full_range_s1"] = np.arange(-20*bw_s1_dt/2, 100+2/3*bw_s1_dt, bw_s1_dt)
 default_bins["area_S2"] = np.arange(-bw_s2_area/2, 8000+bw_s2_area*3/2, bw_s2_area)
-
+default_bins["area_S1"] = np.arange(-bw_s1_area/2, 1000+bw_s1_area*3/2, bw_s1_area)
 
 
 
@@ -319,9 +322,9 @@ def correct_s1(kr, s1_corr_pars):
     return(None)
     
 
-def plot_binned(ax, x, y, bins = 10, marker = ".", label = "", eb_1 = False, eb_2 = False, x_max_plot=False, *args, **kwargs):
+def plot_binned(ax, x, y, bins = 10, marker = ".", label = "", eb_1 = False, eb_2 = False, x_max_plot=False, n_counts_min=2, nresults_min=2, *args, **kwargs):
     
-    cbc, cmedian, cmd_sd, cmd_unc = get_binned_data(x, y, bins=bins, *args, **kwargs)
+    cbc, cmedian, cmd_sd, cmd_unc = get_binned_data(x, y, bins=bins, n_counts_min=n_counts_min, nresults_min=nresults_min, *args, **kwargs)
     
     if x_max_plot is not False:
         _, cbc_p, cmedian_p, cmd_sd_p, cmd_unc_p = fhist.remove_zero(cbc <= x_max_plot, cbc, cmedian, cmd_sd, cmd_unc)
@@ -330,7 +333,7 @@ def plot_binned(ax, x, y, bins = 10, marker = ".", label = "", eb_1 = False, eb_
         
         
     if ax is not False:
-        _ = ax.plot(cbc_p, cmedian_p, ".", label = label, marker= marker)[0]
+        _ = ax.plot(cbc_p, cmedian_p, ".", label = label, marker= marker, *args, **kwargs)[0]
         if eb_1 is True:
             fhist.errorbar(ax, cbc_p, cmedian_p, cmd_unc_p, color = _.get_color())
         if eb_2 is True:
