@@ -5,41 +5,9 @@ from scipy.optimize import curve_fit
 import flo_histograms as fhist
 import matplotlib.pyplot as plt
 import decimal
-
-
-# default variables
-position_gate = 2.95 
-position_cathode = 42.06
-S1_correction_window = (4, 40)
-
-
-sigma_position_gate = .2
-sigma_position_cathode = .3
-
-
-
-bw_drift = 2
-bw_drift_aa = 1 # aa = above anode
-bw_s1_dt = 2
-bw_s1_area = 20
-bw_s2_area = 200
-
-bins_drift = np.arange(-bw_drift/2, 60+bw_drift/2, bw_drift)
-bins_drift = np.arange(-bw_drift/2, 60+bw_drift/2, bw_drift)
-
-
-default_bins = {
-    "drifttime_all": bins_drift,
-}
-default_bins["drifttime_below_anode"] = bins_drift[bins_drift > position_gate]
-default_bins["drifttime_above_anode"] = np.arange(-bw_drift_aa/2, position_gate+bw_drift_aa*2/3, bw_drift_aa)
-default_bins["drifttime_fine"] = np.arange(-bw_drift_aa/2, 40+bw_drift_aa*2/3, bw_drift_aa)
-
-default_bins["drifttime"] = np.arange(position_gate+1, position_cathode-1, 1)
-default_bins["full_range_s1"] = np.arange(-20*bw_s1_dt/2, 100+2/3*bw_s1_dt, bw_s1_dt)
-default_bins["area_S2"] = np.arange(-bw_s2_area/2, 8000+bw_s2_area*3/2, bw_s2_area)
-default_bins["area_S1"] = np.arange(-bw_s1_area/2, 1000+bw_s1_area*3/2, bw_s1_area)
-
+from default_bins import *
+import inspect
+from datetime import datetime
 
 
 
@@ -203,7 +171,7 @@ def exp_decay(t, A, tau, C):
     return(A*np.exp(-t/tau)+C)
 
 
-def exp_decay_zero(t, A, tau, C):
+def exp_decay_zero(t, A, tau):
     return(A*np.exp(-t/tau))
 
     
@@ -322,9 +290,14 @@ def correct_s1(kr, s1_corr_pars):
     return(None)
     
 
-def plot_binned(ax, x, y, bins = 10, marker = ".", label = "", eb_1 = False, eb_2 = False, x_max_plot=False, n_counts_min=2, nresults_min=2, *args, **kwargs):
+def plot_binned(ax, x, y, bins = 10, marker = ".", label = "", eb_1 = False, eb_2 = False, x_max_plot=False, n_counts_min=2, nresults_min=2, return_plot = False, plt_x_offset = False, *args, **kwargs):
+    '''
+    params:
+    n_counts_min: only use bins with more than this many entrys
+    nresults_min: only return result if more than this many bins
+    '''
     
-    cbc, cmedian, cmd_sd, cmd_unc = get_binned_data(x, y, bins=bins, n_counts_min=n_counts_min, nresults_min=nresults_min, *args, **kwargs)
+    cbc, cmedian, cmd_sd, cmd_unc, cmd_len = get_binned_data(x, y, bins=bins, n_counts_min=n_counts_min, nresults_min=nresults_min, *args, **kwargs)
     
     if x_max_plot is not False:
         _, cbc_p, cmedian_p, cmd_sd_p, cmd_unc_p = fhist.remove_zero(cbc <= x_max_plot, cbc, cmedian, cmd_sd, cmd_unc)
@@ -333,45 +306,108 @@ def plot_binned(ax, x, y, bins = 10, marker = ".", label = "", eb_1 = False, eb_
         
         
     if ax is not False:
+        if plt_x_offset is not False:
+            cbc_p = cbc_p + plt_x_offset
         _ = ax.plot(cbc_p, cmedian_p, ".", label = label, marker= marker, *args, **kwargs)[0]
         if eb_1 is True:
             fhist.errorbar(ax, cbc_p, cmedian_p, cmd_unc_p, color = _.get_color())
         if eb_2 is True:
             fhist.errorbar(ax, cbc_p, cmedian_p, cmd_sd_p, color = _.get_color(), alpha= .25)
     
-    return(cbc, cmedian, cmd_sd, cmd_unc)
+    plt_ = None
+    if return_plot is True:
+        plt_ = _
+    return(cbc, cmedian, cmd_sd, cmd_unc, cmd_len, plt_)
 
 
 
-def get_binned_data(dt, area, bins, n_counts_min=2, nresults_min=2, *args, **kwargs):
+def get_binned_data(dt, area, bins, f_median = fhist.median, n_counts_min=20, nresults_min=5, save_plots = False, save_plots_suffix="", *args, **kwargs):
     '''
     helper function for get_e_lifetime_from_run
-    
     bins area by dt and calculates median statistics
-    
     returns bin-center, median, spread and uncertainty for all bins
-        
+
+    params:
+        n_counts_min: only use bins with more than this many entrys
+        nresults_min: only return result if more than this many bins
+        f: fucntion that returns median, spread and uncertainty of values
     '''
     
 
     binned_data = fhist.binning(dt, area, bins)
     bc = []
     md = []
-
-    for bc_, values in binned_data.items():
+    lens = []
+    
+    
+    kwargs_add = {}
+    if (save_plots is not False) & ("ax" not in inspect.getfullargspec(f_median).args):
+        # does not make sense to plot something if the function dies not plot something
+        print(f"do not save into {save_plots} (args: {inspect.getfullargspec(f_median).args})")
+        save_plots = False
+        
+        
+    
+    
+    if save_plots is not False:
+        ldata = len(binned_data)
+        n_row = int(ldata**.5)+1
+        ncol = int(ldata / n_row)+1
+        fig, axs = fhist.make_fig(n_row, ncol, w = 6, h = 4)
+    
+    for i, (bc_, values) in enumerate(binned_data.items()):
+        if save_plots is not False:
+            axs[i].set_title(f"bin: {bc_}")
+            kwargs_add["ax"]= axs[i]
         if len(values) >= n_counts_min:
             bc.append(bc_)
-            md.append(fhist.median(values))
+            md.append(f_median(values, *args, **kwargs_add, **kwargs))
+            lens.append(len(values))
+    
+    if save_plots is not False:
+        plt.tight_layout()
+        plt.savefig(f"{save_plots}{save_plots_suffix}_-{n_counts_min}-{nresults_min}.png")
+        plt.close()
     
     if len(bc) >= nresults_min:
         median, md_sd, md_unc = zip(*md)
     
-        return(np.array(bc), np.array(median), np.array(md_sd), np.array(md_unc))
+        return(np.array(bc), np.array(median), np.array(md_sd), np.array(md_unc), np.array(lens))
     else:
-        return(np.array([]), np.array([]), np.array([]), np.array([]))
+        return(np.array([]), np.array([]), np.array([]), np.array([]), np.array([]))
 
 
-def get_e_lifetime_from_run(kr, ax = False, bins = None, field = "area_s2", *args, **kwargs):
+
+
+
+def get_constant_chi2_for_binned_data(bins, ax = False, linestyle = "dashed", color = "black", *args, **kwargs):
+    '''
+    returns chi2 of the binned data to constant fucntion (mean of medians)
+    
+    args: bins 5-tuple with bin centers, median, spread_median, unc_median, len_median
+    '''
+    bc, md, sdmd, uncmd, lenmd = bins
+    
+    mean = np.mean(md)
+    
+    chi2 = np.sum(((mean - md)/uncmd)**2)
+    ndf = len(bc) - 1
+    chi2r = chi2/ndf
+    chi2_tex = f"$\\chi^2_\\mathrm{{red}} = {chi2:.2f}/{ndf:.0f} = {chi2r:.1f}$"
+    
+    if ax is not False:
+        ax.axhline(mean, label = f"mean: {mean:.1f} ({chi2_tex})", linestyle = linestyle, color = color)
+    
+    
+    
+    return(chi2, ndf, chi2r, chi2_tex)
+    
+
+
+
+
+
+def get_e_lifetime_from_run(kr, ax = False, bins = None, field = "area_s2", show_linearity = False, plt_x_offset = False, *args, **kwargs):
     '''
 calculates the electron lifetime of a run based on the uncorrected S2 area and the drift time
 
@@ -396,62 +432,86 @@ the lifetime plus uncertainty (in  µs)
     if bins is None:
         bins = default_bins["drifttime"]
 
-    bc, median, md_sd, md_unc = get_binned_data(kr["time_drift"], kr[field], bins)
+    bc, median, md_sd, md_unc, md_len = get_binned_data(kr["time_drift"], kr[field], bins, save_plots_suffix = "_uncorrected", bins_y = default_bins["area_S2"], *args, **kwargs)
     
     
     
     # select what info to use for fit
-    xf, yf, syf = bc, median, md_unc
+    xf, yf, spryf, syf = bc, median, md_sd, md_unc
     
-    p0 = [median[0], 100, 0]
+    p0 = [median[0], 100]
 
     fit, cov = curve_fit(
         exp_decay_zero,
         xf, yf,
         absolute_sigma=True,
         sigma=syf,
-        p0 = p0,
-        bounds = (0, np.inf)
+        p0 = p0
     )
 
 
 
     sfit = np.diag(cov)**.5
-    chi2 = fhist.chi_sqr(exp_decay, xf, yf, syf, *fit)
+    chi2 = fhist.chi_sqr(exp_decay_zero, xf, yf, syf, *fit)
 
     xc = np.linspace(bc[0], bc[-1], 1000)
-    ycf = exp_decay(xc, *fit)
+    ycf = exp_decay_zero(xc, *fit)
 
 
 
     correct_s2(kr, fit[1])
-    cbc, cmedian, cmd_sd, cmd_unc = get_binned_data(kr["time_drift"], kr["cS2"], bins)
+    cbc, cmedian, cmd_sd, cmd_unc, cmd_len = get_binned_data(kr["time_drift"], kr["cS2"], bins, save_plots_suffix = "_corrected", *args, **kwargs)
 
 
 
 
 
     if ax is not False:
+        
         plt_data = ax.plot(xf, yf, ".", label = f"raw S2 area\n(median $\\pm$ uncertainty)")[0]
         fhist.errorbar(ax, xf, yf, syf, color = plt_data.get_color())
-        ax.plot(xc, ycf, label = f"fit $\\chi^2_{{red}}= {chi2[3]}$")
+        fhist.errorbar(ax, xf, yf, spryf, color = plt_data.get_color(), alpha = .5)
+        
+        ax.plot(xc, ycf, label = f"fit {chi2[-1]}")
         fhist.addlabel(ax, f"$\\tau = ({fit[1]:.1f}\\pm{sfit[1]:.1f})$ ns")
         fhist.addlabel(ax, f"$A = {fit[0]:.1f}\\pm{sfit[0]:.1f}$")
         fhist.addlabel(ax, f"$C$ fixed to 0")
 
 
-        plt_data_c = ax.plot(cbc, cmedian, "x", label = f"cS2")[0]
-        fhist.errorbar(ax, cbc, cmedian, cmd_unc, color = plt_data_c.get_color())
+        cbcp = cbc
+        label_cs2 = f"cS2"
+        if plt_x_offset is not False:
+            print(f"plt_x_offset: {plt_x_offset:.1f}")
+            cbcp = cbc + plt_x_offset
+            label_cs2 = f"cS2 (shifted by {plt_x_offset:.1f} µs)"
+        
+        plt_data_c = ax.plot(cbcp, cmedian, "x", label = label_cs2)[0]
+        fhist.errorbar(ax, cbcp, cmedian, cmd_unc, color = plt_data_c.get_color())
+        
+        
+        
+        if show_linearity is True:
+            chi2_lin = get_constant_chi2_for_binned_data(
+                (cbcp, cmedian, cmd_sd, cmd_unc, cmd_len),
+                ax = ax,
+                color = plt_data_c.get_color(),
+                *args, **kwargs
+            )
+            
+        
+        
 
         ax.set_xlabel("drifttime / µs")
         ax.set_ylabel("S2 Area / PE")
         
-        ax.legend(loc = "lower left")
+        ax.legend(loc = "upper right")
 
     return({
         "e-lifetime": (fit[1], sfit[1]),
         "cS2_0": (fit[0], sfit[0]),
-        "chi2": (chi2[2], chi2[3])
+        "chi2": (chi2[2], chi2[3]),
+        "binsu": (bc, median, md_sd, md_unc, md_len),
+        "binsc": (cbc, cmedian, cmd_sd, cmd_unc, cmd_len),
     })
     
     

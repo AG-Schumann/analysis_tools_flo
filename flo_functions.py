@@ -10,6 +10,7 @@ meta = {
         "params_unit": ["µs", "µs", "", ""],
         "formula": "$\\frac{{(y_1 - y_0)}}{{1+\\frac{{exp((\\mu-x)}}{{sigma}}}} + y_0$",
     }
+}
 
 
 

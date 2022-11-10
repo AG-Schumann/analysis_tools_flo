@@ -8,6 +8,7 @@ from datetime import datetime
 import sys
 import inspect
 from threading import Thread, Event
+from default_bins import *
 
 try:
     from IPython.display import clear_output
@@ -35,15 +36,24 @@ def make_dict(**kwargs):
         {n:v for n, v in kwargs.items()}
     )
 
-def make_fig(nrows=1, ncols=1, w=6, h=4, reshape_ax = True, *args, **kwargs):
+def make_fig(nrows=1, ncols=1, w=6, h=4, reshape_ax = True, n_tot = False, *args, **kwargs):
     '''
     creates a figure with nrows by ncols plots
+    n_tot: total number of cells, overwrites nrow and ncols, set negative to make plot wider than tall
     set its size to w*ncols and  h*nrows
     returns fig and reshapen ax (as 1d list) elements
     '''
     
+    if n_tot is not False:
+        ncols = int(abs(n_tot)**.5)
+        nrows = int(np.ceil(abs(n_tot) / ncols))
+        if n_tot < 0:
+            ncols, nrows = nrows, ncols
+    
     fig, axs = plt.subplots(nrows, ncols, *args, **kwargs)
     fig.set_size_inches(ncols*w, nrows*h)
+    fig.set_facecolor("white")
+    fig.set_dpi(100)
     
     if reshape_ax is True:
         if isinstance(axs, plt.Axes):
@@ -84,7 +94,7 @@ def errorbar(
 
 
 
-def add_fit_parameter(ax, l, p, sp=np.inf, u="", fmt =".1f"):
+def add_fit_parameter(ax, l, p, sp=None, u="", fmt =".1f"):
     '''
     adds nicely formated fit results to legend
     
@@ -96,9 +106,8 @@ def add_fit_parameter(ax, l, p, sp=np.inf, u="", fmt =".1f"):
     '''
     
     brackets = False
-    if np.isinf(sp) or (np.abs(sp) > 10*np.abs(p)):
+    if sp is None:
         str_ = f"{p:.1f}"
-        
     else:
         str_ = f"{p:{fmt}} \\pm {sp:{fmt}}"
         brackets = True
@@ -120,9 +129,118 @@ def add_fit_parameter(ax, l, p, sp=np.inf, u="", fmt =".1f"):
 
 
 
+def median_gauss(values, bins_median = "auto", ax = False, return_chi2 = False, return_all = False, *args, **kwargs):
+    '''
+returns mu, sigma, s_mu and the chi2-tuple (in that order) of an arbitrary distribution by a gaus fit
+    if the fit crashes returns 4 x nan
+
+parameters:
+    bins_median ('auto'):
+        the bins for the values to be binned into (np.histogram(values, bins_median))
+        if set to 'auto' or number it will use the median +- 3 x mad and turn it into
+        25 or bins_median bins; otherwise use bins_median as bins
+        
+    ax (False): if this is set to an matplotlib axis the fit is ploted into that axis
+    
+    return_chi2 (False): wheter or not chi2 should be returned 
+    
+    return_all (False): wheter or not to return all available data
+    
+    *args, *kwargs: the are not fed anywhere
+          
+         
+        
+    '''
+    x_ = np.array(values)*1
+    x_ = x_[np.isfinite(x_)]
+
+    
+
+    
+    
+    med = np.median(x_)
+    width = 4*np.median(np.abs(x_ - med))
+    
+    if bins_median == "auto":
+        bins_median = np.linspace(med-width, med+width, 10)
+    elif isinstance(bins_median, (int, float)):
+        bins_median = np.linspace(med-width, med+width, int(bins_median))
+    
+    counts, bins = np.histogram(values, bins = bins_median)
+    bc = get_bin_centers(bins)
+    bw = np.diff(bins)
+    s_counts = (counts+1)**.5
+    #s_counts[s_counts == 0] = 1
+    
+    density = counts / bw
+    s_density = s_counts / bw
+    
+    if isinstance(ax, plt.Axes):
+        errorbar(ax, bc, density, s_density, label = f"data (N = {np.sum(counts):.0f} (input: {len(values)})", plot=True)
+
+    
+    p0 = (bc[np.argmax(counts)], np.diff(bc)[0] * np.sum(counts > 0)/3, max(counts))
+    
+    ret_all = {
+        "values": values,
+        "x_": x_,
+        "bins": bins,
+        "bc": bc,
+        "bw": bw,
+        "counts": counts,
+        "s_counts": s_counts,
+        "density": density,
+        "s_density": s_density,
+        "p0": p0,
+    }
+    
+    try:
+        fit, cov = scipy.optimize.curve_fit(
+            gauss,
+            bc,
+            density,
+            p0 = p0,
+            absolute_sigma = True,
+            sigma = s_density,
+        )
+        sfit = np.diag(cov)**.5
+        chi2 = chi_sqr(gauss, bc, density, s_density, *fit)
+       
+       
+        
+        ret_all["fit"] = fit
+        ret_all["sfit"] = sfit
+        ret_all["cov"] = cov
+        ret_all["chi2"] = chi2
+        
+        
+        if isinstance(ax, plt.Axes):
+            xf = np.linspace(min(bins), max(bins), 1000)
+            yf = gaus(xf, *fit)
+            ax.plot(xf, yf, label = f"fit {chi2[-1]}")
+            for par, val, sval in zip(["\\mu", "\\sigma", "A"], fit, sfit):
+                add_fit_parameter(ax, par, val, sval)
+            ax.legend(loc = "upper right")
+            ax.set_ylabel("density / counts/binwidth")
+        
+        
+        
+        out = (fit[0], np.abs(fit[1]), sfit[0])
+    except RuntimeError as e:
+        ret_all["error"] = e
+        out = (float("nan"), float("nan"), float("nan"))
+   
+    if return_chi2 is True:
+        out = (*out, chi2)
+        
+    if return_all is True:
+        out = (*out, ret_all)
+    
+    return(out)
 
 
-def median(x, percentile = 68.2, clean = True):
+
+def median(x, percentile = 68.2, clean = True, *args, **kwargs):
     x_ = np.array(x)*1
     if clean is True:
         x_ = x_[np.isfinite(x_)]
@@ -133,7 +251,10 @@ def median(x, percentile = 68.2, clean = True):
     
     return(med, mad, unc_med)
 
-def mean(x, percentile = 68.2, clean = True):
+
+
+
+def mean(x, percentile = 68.2, clean = True, *args, **kwargs):
     x_ = np.array(x)*1
     if clean is True:
         x_ = x_[np.isfinite(x_)]
@@ -228,7 +349,10 @@ def chi_sqr(f, x, y, s_y, *pars, ndf = False):
     chi = np.sum(((y - y_f)/s_y)**2)
     
     return(
-        (chi, ndf, chi/ndf, f"{chi:.1f}/{ndf:.0f} = {chi/ndf:.1f}")
+        (chi, ndf, chi/ndf,
+            f"reduced chi² = {chi:.1f}/{ndf:.0f} = {chi/ndf:.1f}",
+            f"$\\chi^2_\\mathrm{{red}} = {chi:.1f}/{ndf:.0f} = {chi/ndf:.1f}$"
+        )
     )
 
 
@@ -389,39 +513,48 @@ def get_bin_centers(bins):
 
 
 
-def get_hist_data(data, s_offset = 0, **kwargs):
+def get_hist_data(data, s_offset = 0, density= "normalized", **kwargs):
     ''''
     Computes a np.histogram based on 'data', should support all of
     np.histograms parameters
     calculates uncertainties, density and uncertainty of density based on sqrt(N) per bin
     
     Parametrers:
+    density ("normalized"): "normalized" or "binwidth"
+        calculates the density based on the total counts or by dividing by the binwidth
     s_offset: used to calculate s_counts: sqrt(n + s_offset) (default = 0)
     '''
     
-    hist_data = np.histogram(data, **kwargs)
+    counts, bins = np.histogram(data, **kwargs)
         
-    bins_centers = [ np.mean([x1, x2]) for x1, x2 in zip(hist_data[1][:-1], hist_data[1][1:])]
+    bins_centers = get_bin_centers(bins)    
+    bw = np.diff(bins)
     
     
-    bins = hist_data[1]
-    counts = hist_data[0]
-    s_counts = np.sqrt(hist_data[0]+s_offset)
+    s_counts = np.sqrt(counts+s_offset)
     
-    counts_sum = sum(counts)
-    s_counts_sum = sum(s_counts**2)**.5
-    
-    
-    density = counts/counts_sum
-    s_density = (
-          (s_counts/counts_sum)**2
-        + (counts/counts_sum**2 * s_counts_sum)**2
-    )**.5
+    if density == "normalized":
+        counts_sum = np.sum(counts)
+        s_counts_sum = np.sum(s_counts**2)**.5
+        density = counts/counts_sum
+        s_density = (
+              (s_counts/counts_sum)**2
+            + (counts/counts_sum**2 * s_counts_sum)**2
+        )**.5
     
     
+    elif density == "binwidth":
+        density = counts / bw
+        s_density = s_counts / bw
+        
+    else:
+        density = False
+        s_density = False
     
     return({
         "bin_centers": bins_centers,
+        "bc": bins_centers,
+        "bw": bw, 
         "bins": bins,
         "counts": counts,
         "s_counts": s_counts,
@@ -465,7 +598,9 @@ def make_2d_hist_plot(
         bins_y = None, # np.logspace(1,4,100)
         aowp = True,
         colorbar_label = "Counts/bin",
-        debug = False):
+        debug = False,
+        *args, **kwargs
+        ):
     '''
     creates a 2d histogram (eg. area over width) into ax_ (if false, plots directly)
     'aowp' (area over width plot): sets scales to log and adds labels to axis
@@ -510,7 +645,7 @@ def make_2d_hist_plot(
     
     
     
-    im = ax_.pcolormesh(bins_x, bins_y, counts.T, norm=LogNorm())
+    im = ax_.pcolormesh(bins_x, bins_y, counts.T, norm=LogNorm(), *args, **kwargs)
     if colorbar_label:
         cb = plt.colorbar(im, ax=ax_, label=colorbar_label)
     
@@ -532,6 +667,11 @@ def exp_decay(t, A, kappa, C):
 def gaus(x, mu = 0, sigma = 1, A = 1, C = 0):
     return(
         A *np.exp(-.5*((x-mu)/sigma)**2) + C
+    )
+
+def gauss(x, mu = 0, sigma = 1, A = 1):
+    return(
+        A *np.exp(-.5*((x-mu)/sigma)**2)
     )
 
 def fit_exp(x, y, offset = -1, meta = False, C0 = True, params = None):
@@ -697,16 +837,20 @@ def fit_gaus(x, y, absolute_sigma = True, sigma = None, meta = False, **kwargs):
         chi_2 = np.sum(((y_fit - y)/sigma)**2)
         ndf = len(x) - 4
         chi2_red = chi_2/ndf
+        chi2_tex = f"$\\chi^2_\\mathrm{{red}} = {chi_2:.2f}/{ndf:.0f} = {chi2_red:.1f}$"
+        
         chi_2_dict = {
             "chi2": chi_2,
             "ndf": ndf,
             "chi2_red": chi2_red,
+            "chi2_tex": chi2_tex,
         }
     else:
         chi_2_dict = {
             "chi2": False,
             "ndf": False,
             "chi2_red": False,
+            "chi2_tex": False,
         }
     
         
@@ -971,3 +1115,4 @@ def multi_gaus(x, A, mu, sigma):
     return(
         y
     )
+    
