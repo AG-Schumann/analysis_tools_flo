@@ -139,6 +139,7 @@ parameters:
         the bins for the values to be binned into (np.histogram(values, bins_median))
         if set to 'auto' or number it will use the median +- 3 x mad and turn it into
         25 or bins_median bins; otherwise use bins_median as bins
+        if set to negative number: dont use the smart aproch but just pass -1* that number to np.histogram
         
     ax (False): if this is set to an matplotlib axis the fit is ploted into that axis
     
@@ -159,12 +160,15 @@ parameters:
     
     
     med = np.median(x_)
-    width = 4*np.median(np.abs(x_ - med))
+    width = 6*np.median(np.abs(x_ - med))
     
     if bins_median == "auto":
-        bins_median = np.linspace(med-width, med+width, 10)
+        bins_median = np.linspace(med-width, med+width, 12)
     elif isinstance(bins_median, (int, float)):
-        bins_median = np.linspace(med-width, med+width, int(bins_median))
+        if bins_median > 0:
+            bins_median = np.linspace(med-width, med+width, int(bins_median))
+        else:
+            bins_median = int(-bins_median)
     
     counts, bins = np.histogram(values, bins = bins_median)
     bc = get_bin_centers(bins)
@@ -176,8 +180,11 @@ parameters:
     s_density = s_counts / bw
     
     if isinstance(ax, plt.Axes):
-        errorbar(ax, bc, density, s_density, label = f"data (N = {np.sum(counts):.0f} (input: {len(values)})", plot=True)
-
+        errorbar(
+            ax, bc, counts, s_counts,
+            label = f"data (N = {np.sum(counts):.0f} (input: {len(values)})",
+            plot = True,
+        )
     
     p0 = (bc[np.argmax(counts)], np.diff(bc)[0] * np.sum(counts > 0)/3, max(counts))
     
@@ -198,13 +205,13 @@ parameters:
         fit, cov = scipy.optimize.curve_fit(
             gauss,
             bc,
-            density,
+            counts,
             p0 = p0,
             absolute_sigma = True,
-            sigma = s_density,
+            sigma = s_counts,
         )
         sfit = np.diag(cov)**.5
-        chi2 = chi_sqr(gauss, bc, density, s_density, *fit)
+        chi2 = chi_sqr(gauss, bc, counts, s_counts, *fit)
        
        
         
@@ -221,7 +228,7 @@ parameters:
             for par, val, sval in zip(["\\mu", "\\sigma", "A"], fit, sfit):
                 add_fit_parameter(ax, par, val, sval)
             ax.legend(loc = "upper right")
-            ax.set_ylabel("density / counts/binwidth")
+            ax.set_ylabel("counts")
         
         
         
@@ -240,7 +247,7 @@ parameters:
 
 
 
-def median(x, percentile = 68.2, clean = True, *args, **kwargs):
+def median(x, percentile = 68.2, clean = True, ax=False, *args, **kwargs):
     x_ = np.array(x)*1
     if clean is True:
         x_ = x_[np.isfinite(x_)]
@@ -248,6 +255,15 @@ def median(x, percentile = 68.2, clean = True, *args, **kwargs):
     med = np.median(x_)
     mad = np.percentile(np.abs(x_ - med), percentile)
     unc_med = mad/len(x_)**.5
+    
+    
+    if isinstance(ax, plt.Axes):
+        
+        col = ax.axvline(med, label = f"median: {med:.1f} ± {unc_med:.1f}", *args, **kwargs).get_color()
+        ax.axvspan(med-unc_med,med+unc_med, color = col, alpha = .25)
+        ax.axvspan(med-mad,med+mad, label = f"spread: {mad:.1f}", color = col, alpha = .1)
+        
+    
     
     return(med, mad, unc_med)
 
@@ -334,16 +350,22 @@ def count(x):
     
     
 
-def chi_sqr(f, x, y, s_y, *pars, ndf = False):
+def chi_sqr(f, x, y, s_y, *pars, ndf = False, ignore_zeros = False):
     '''
     returns a tuple with chi^2, ndf and reduced chi^2
     '''
-    if ndf is False:
-        ndf = len(x) - len(pars)
-    
     x = np.array(x)
     y = np.array(y)
     s_y = np.array(s_y)
+    
+    
+    
+    if ignore_zeros is True:
+        y, s_y, x = remove_zero(y, s_y, x)
+    
+    
+    if ndf is False:
+        ndf = len(x) - len(pars)
     
     y_f = f(x, *pars)
     chi = np.sum(((y - y_f)/s_y)**2)

@@ -3,6 +3,7 @@ import scipy.optimize
 import pandas as pd
 from scipy.optimize import curve_fit
 import flo_histograms as fhist
+import flo_functions as ff
 import matplotlib.pyplot as plt
 import decimal
 from default_bins import *
@@ -321,7 +322,7 @@ def plot_binned(ax, x, y, bins = 10, marker = ".", label = "", eb_1 = False, eb_
 
 
 
-def get_binned_data(dt, area, bins, f_median = fhist.median, n_counts_min=20, nresults_min=5, save_plots = False, save_plots_suffix="", *args, **kwargs):
+def get_binned_data(dt, area, bins, f_median = fhist.median_gauss, n_counts_min=20, nresults_min=5, save_plots = False, save_plots_suffix="", *args, **kwargs):
     '''
     helper function for get_e_lifetime_from_run
     bins area by dt and calculates median statistics
@@ -330,7 +331,7 @@ def get_binned_data(dt, area, bins, f_median = fhist.median, n_counts_min=20, nr
     params:
         n_counts_min: only use bins with more than this many entrys
         nresults_min: only return result if more than this many bins
-        f: fucntion that returns median, spread and uncertainty of values
+        f_median: fucntion that returns median, spread and uncertainty of values
     '''
     
 
@@ -432,7 +433,7 @@ the lifetime plus uncertainty (in  µs)
     if bins is None:
         bins = default_bins["drifttime"]
 
-    bc, median, md_sd, md_unc, md_len = get_binned_data(kr["time_drift"], kr[field], bins, save_plots_suffix = "_uncorrected", bins_y = default_bins["area_S2"], *args, **kwargs)
+    bc, median, md_sd, md_unc, md_len = get_binned_data(kr["time_drift"], kr[field], bins, save_plots_suffix = "_uncorrected", *args, **kwargs)
     
     
     
@@ -468,7 +469,7 @@ the lifetime plus uncertainty (in  µs)
 
     if ax is not False:
         
-        plt_data = ax.plot(xf, yf, ".", label = f"raw S2 area\n(median $\\pm$ uncertainty)")[0]
+        plt_data = ax.plot(xf, yf, ".", label = f"raw S2 area")[0]
         fhist.errorbar(ax, xf, yf, syf, color = plt_data.get_color())
         fhist.errorbar(ax, xf, yf, spryf, color = plt_data.get_color(), alpha = .5)
         
@@ -509,10 +510,105 @@ the lifetime plus uncertainty (in  µs)
     return({
         "e-lifetime": (fit[1], sfit[1]),
         "cS2_0": (fit[0], sfit[0]),
-        "chi2": (chi2[2], chi2[3]),
+        "chi2": (chi2[2], chi2[4]),
         "binsu": (bc, median, md_sd, md_unc, md_len),
         "binsc": (cbc, cmedian, cmd_sd, cmd_unc, cmd_len),
     })
+    
+    
+def get_kr_lifetime_from_run(kr, field = "time_decay_s1", bins = None, bw = 50, f = ff.exp_decay, ax = False, rz = False, count_offset = 1, x_offset = 0, cutoff = True, show_p0 = False, *args, **kwargs):
+    '''
+    returns the krypton lifetime of a krypton run
+    
+    
+    parameters:
+        kr: the dataset to check
+        field ('time_decay_s1'): which field to use
+        bins: which binning to use. by default: -5 to 3500 in steps of 10
+        bw (50): bin width used fdor binning if bins aare not provided
+        f (ff.exp.decay): the fit_function (see flo_functions) to use
+        ax (False): if this an axis element the fit will be plotted into here
+        rz (False): wheter or note empty bins shoudl be removed
+        count_offset (1): how many counts shoudl be added when calculating the uncertrainty (sqrt(n + count_offset))
+        x_offset (0): how many bins after the max values should the fitting start?
+        cutoff (True): remove empty bins after the last non zero bins
+        show_p0 (False): wheter the starting parameters should be shown
+    
+    '''
+    
+    
+    if bins is None:
+        bins = np.arange(-bw/2, 3500+bw/2*3, bw)
+    
+    if ((rz is not True) or (cutoff is True)) and count_offset < 1:
+        count_offset = 1
+        # print(f"set count_offset to {count_offset} as zero counts are not being fully removed")
+        
+    
+    
+    c_, bins = np.histogram(kr[field], bins = bins)
+    sc_ = (c_+count_offset)**.5
+    bc_ = fhist.get_bin_centers(bins)
+
+    if rz is True:
+        c, sc, bc = fhist.remove_zero(c_, sc_, bc_)
+    elif cutoff is True:
+        _, c, sc, bc = fhist.remove_zero([1]*(np.nonzero(c_)[0][-1]+1), c_, sc_, bc_)
+    else:
+        c, sc, bc = c_, sc_, bc_
+        
+    if isinstance(ax, plt.Axes):
+        ax.set_xlabel("decay time / ns")
+        ax.set_ylabel("counts")
+        color = ax.plot(bc, c, ".", label = f"Data (N = {np.sum(c, dtype = int)})")[0].get_color()
+        fhist.errorbar(ax,  bc, c, sc, color = color)
+    else:
+        show_p0 = False
+
+    i0 = np.argmax(c)+x_offset
+    x, y, sy = bc[i0:], c[i0:], sc[i0:]
+    
+    
+    tau_lit = fhist.tau_kr_lit
+    stau_lit= fhist.stau_kr_lit
+    p0 = f.p0(x, y, tau_lit)
+    
+    xp = np.linspace(min(x), max(x), 1000)
+    y0 = f(xp, *p0)
+    
+    if show_p0 is True:
+        ax.plot(xp, y0, label = f"p0")
+
+        for tex, v, u in zip(f.parmaters_tex, p0, ["", "ns", ""]):
+            fhist.add_fit_parameter(ax, tex, v, u = u)
+
+    fit, cov = scipy.optimize.curve_fit(
+        f,
+        x,
+        y,
+        absolute_sigma=True,
+        sigma = sy,
+        p0 = p0,
+    )
+    sfit = np.diag(cov)**.5
+
+
+    yf = f(xp, *fit)
+    chi2 = fhist.chi_sqr(f, x, y, sy, *fit, ignore_zeros = True)
+
+    
+    if isinstance(ax, plt.Axes):
+        ax.plot(xp, yf, label = f"fit: {chi2[-1]}")
+        fhist.addlabel(ax, f)        
+        for tex, v, sv, u in zip(f, fit, sfit, ["", "ns", ""]):
+            fhist.add_fit_parameter(ax, tex, v, sv, u = u)
+
+        fhist.add_fit_parameter(ax, "\\tau_\mathrm{lit}", tau_lit, stau_lit, u = "ns")
+        ax.legend(loc = "upper right")
+    
+    return((fit[1], sfit[1]), {"fit":fit, "sfit":sfit, "cov": cov, "chi2": chi2})
+    
+        
     
     
     
