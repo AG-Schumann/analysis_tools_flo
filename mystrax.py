@@ -301,13 +301,31 @@ def load_run_kr_old(runs, config = False, gs = False, W = 13.5, peaks = False, c
     return(sp, calibration, peaks)
 
 @flo_decorators.silencer
-def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, context = context_sp, calibrate = True):
+def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, context = context_sp, correct = True, *args, **kwargs):
     '''
     returns sp_krypton and calibration data of runs
-    set peaks = true to also get peaks signals 
     
-    calibration data of first run in runs is used for all
+    parameters:
+    config (False): if given, this config is used instead of the default custom config
+    gs (False): tuple of g1 and g2, if given, this is used to calculate the energy of the peak
+    W (13.5): required to calculate the Energy with g1 and g2
+    peaks (False): whether or not to also return the peaks of the runs
+        (WARNING: this might take some time as all peaks have to be loaded first and are later filtered before returning to save RAM.
+        the event peak data is also stored in sp_krypton though, so this should not be needed anymore)
+    context (context_sp): which context to laod data from
+    correct (True):
+        Whether or not to apply the S1 and S2 corrections (if) found in the database
     '''
+    
+    if "calibrate" in kwargs:
+        print("\33[41mlegacy parameter 'calibrate' was used\33[0m")
+        correct = kwargs["calibrate"]
+    
+    
+    
+    
+    
+    
     t_start = datetime.now()
     if config is False:
         config = default_config
@@ -326,7 +344,7 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
     db_dict = False
     
     calibration = False
-    if calibrate is True:
+    if correct is True:
         db = list(mycol.find({"run":{"$in": runs}}))
         db_dict = {db_i["run"]:db_i for db_i in db}
         calibration = db_dict
