@@ -9,12 +9,14 @@ class fit_function:
         short_description = "",
         parmaters = None, parmaters_tex = None,
         formula = "", formula_tex = None,
+        docstring = ""
     ):
         self.f = f
         self.p0 = f_p0
         self.description = description
         self.short_description = short_description
         self.s = short_description
+        self.__doc__ = docstring
         
         if parmaters is None:
             raise ValueError("parmaters for fucntion not given! use ")
@@ -41,6 +43,11 @@ class fit_function:
         for pt in self.parmaters_tex:
             yield(pt)
 
+
+
+
+
+
 # exponential decay with constant
 def f_exp_decayC(t, A, tau, C):
     return(A*np.exp(-t/tau)+C)
@@ -57,6 +64,11 @@ exp_decayC = fit_function(
     parmaters_tex = ["A", "\\tau", "C"],
     formula = "A exp(t / tau) + C",
     formula_tex = "$A \\cdot \\exp{{( t / \\tau)}} + C$",
+    docstring = '''
+An exponential decay with a constant offset
+
+usage: y = exp_decayC(x; A, tau, C)
+'''
 )
 
 
@@ -76,6 +88,11 @@ exp_decay = fit_function(
     parmaters_tex = ["A", "\\tau"],
     formula = "A exp(t / tau)",
     formula_tex = "$A \\cdot \\exp{{( t / \\tau)}}$",
+    docstring = '''
+An exponential decay that coverges to zero
+
+usage: y = exp_decayC(x; A, tau)
+'''
 )
 
 
@@ -119,6 +136,11 @@ sigmoid = fit_function(
     parmaters_tex = ["\\mu", "\\sigma", "y_{{0}}", "y_{{1}}"],
     formula = "(y1-y0)/(1+exp(mu-sigma)/sigma) + y0",
     formula_tex = "$\\frac{{(y_1 - y_0)}}{{1+\\frac{{exp((\\mu-x)}}{{sigma}}}} + y_0$",
+    docstring = '''
+A sigoid function that goes from y0 to y1 via a splot of "width" sigma around mu
+
+usage: y = sigmoid(x; mu, sigma, y1, y0)
+'''
 )
 
 
