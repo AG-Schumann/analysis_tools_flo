@@ -301,7 +301,7 @@ def load_run_kr_old(runs, config = False, gs = False, W = 13.5, peaks = False, c
     return(sp, calibration, peaks)
 
 @flo_decorators.silencer
-def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, context = context_sp, correct = True, *args, **kwargs):
+def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, context = context_sp, return_context = False, correct = True, *args, **kwargs):
     '''
     returns sp_krypton and calibration data of runs
     
@@ -384,24 +384,23 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
     print("correcting done")
     
     
-    
-    
-    if peaks is False:
-        t_end = datetime.now()
-        print(f"all done in {t_end - t_start}")
-        return(sp, db_dict)
+    out = []
         
-        
-    print("start loading peaks")
-    peaks = context.get_array(runs_str, "peaks", config = config)
-    print("loading done, filtering")
-    peaks = peaks[np.in1d(peaks["time"], sp["time_signals"].reshape(-1))]
-    print("filtering done")
+    if peaks is True:
+        print("start loading peaks")
+        peaks = context.get_array(runs_str, "peaks", config = config)
+        print("loading done, filtering")
+        peaks = peaks[np.in1d(peaks["time"], sp["time_signals"].reshape(-1))]
+        print("filtering done")
+        out.append(peaks)
     
     t_end = datetime.now()
     print(f"all done in {t_end - t_start}")
         
-    return(sp, db_dict, peaks)
+    context_out = None
+    if return_context is True:
+        out.append(context)
+    return(sp, db_dict, *out)
 
 
 

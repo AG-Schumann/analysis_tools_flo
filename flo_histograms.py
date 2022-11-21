@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+import scipy.stats
 import scipy.optimize
 from scipy.special import erf
 from matplotlib.patches import Rectangle
@@ -8,7 +9,14 @@ from datetime import datetime
 import sys
 import inspect
 from threading import Thread, Event
+
+
+# my packages
 from default_bins import *
+import flo_functions as ff
+
+
+
 
 try:
     from IPython.display import clear_output
@@ -27,6 +35,11 @@ stau_kr_lit = 1.1/np.log(2)
 
 str_tau_kr_lit = f"τ = ({tau_kr_lit:.1f} ± {stau_kr_lit:.1f}) ns"
 label_tau_kr_lit = f"$\\tau = ({tau_kr_lit:.1f} \\pm {stau_kr_lit:.1f})$ ns"
+
+
+
+
+
 
 def make_dict(**kwargs):
     '''
@@ -53,7 +66,7 @@ def make_fig(nrows=1, ncols=1, w=6, h=4, reshape_ax = True, n_tot = False, *args
     fig, axs = plt.subplots(nrows, ncols, *args, **kwargs)
     fig.set_size_inches(ncols*w, nrows*h)
     fig.set_facecolor("white")
-    fig.set_dpi(100)
+    fig.set_dpi(200)
     
     if reshape_ax is True:
         if isinstance(axs, plt.Axes):
@@ -85,7 +98,8 @@ def errorbar(
         color = ax.plot(x, y, marker = marker_plot, color = color, linestyle = linestyle, label = label,  *args, **kwargs)[0].get_color()
         label = None
     
-    ax.errorbar(x, y, sy, label = label, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
+    
+    ax.errorbar(x, y, yerr = sy, label = label, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
 
     
 
@@ -109,8 +123,11 @@ def add_fit_parameter(ax, l, p, sp=None, u="", fmt =".1f"):
     if sp is None:
         str_ = f"{p:.1f}"
     else:
-        str_ = f"{p:{fmt}} \\pm {sp:{fmt}}"
         brackets = True
+        if (sp < 100 * p) or (sp < 100):
+            str_ = f"{p:{fmt}} \\pm {sp:{fmt}}"
+        else:
+            str_ = f"{p:{fmt}} \\pm {sp:.2e}"
     
     
 
@@ -129,7 +146,7 @@ def add_fit_parameter(ax, l, p, sp=None, u="", fmt =".1f"):
 
 
 
-def median_gauss(values, bins_median = "auto", ax = False, return_chi2 = False, return_all = False, *args, **kwargs):
+def median_gauss(values, bins_median = "auto", f = ff.gauss, ax = False, show_p0 = False, return_chi2 = False, return_all = False, *args, **kwargs):
     '''
 returns mu, sigma, s_mu and the chi2-tuple (in that order) of an arbitrary distribution by a gaus fit
     if the fit crashes returns 4 x nan
@@ -161,32 +178,40 @@ parameters:
     
     med = np.median(x_)
     width = 6*np.median(np.abs(x_ - med))
-    
-    if bins_median == "auto":
-        bins_median = np.linspace(med-width, med+width, 12)
-    elif isinstance(bins_median, (int, float)):
-        if bins_median > 0:
-            bins_median = np.linspace(med-width, med+width, int(bins_median))
-        else:
-            bins_median = int(-bins_median)
+    if not isinstance(bins_median, (np.ndarray, list, tuple)):
+        if bins_median == "auto":
+            bins_median = np.linspace(med-width, med+width, 12)
+        elif isinstance(bins_median, (int, float)):
+            if bins_median > 0:
+                bins_median = np.linspace(med-width, med+width, int(bins_median))
+            else:
+                bins_median = int(-bins_median)
     
     counts, bins = np.histogram(values, bins = bins_median)
     bc = get_bin_centers(bins)
     bw = np.diff(bins)
-    s_counts = (counts+1)**.5
-    #s_counts[s_counts == 0] = 1
+    s_counts = s_pois(counts)
+    s_counts_fit = np.max(s_counts, axis = 0)
+    
+    
     
     density = counts / bw
     s_density = s_counts / bw
+    p0 = f.p0(bc, counts)
     
     if isinstance(ax, plt.Axes):
+        xf = np.linspace(min(bins), max(bins), 1000)
         errorbar(
             ax, bc, counts, s_counts,
-            label = f"data (N = {np.sum(counts):.0f} (input: {len(values)})",
+            label = f"data (N = {np.sum(counts):.0f}; input: {len(values)})",
             plot = True,
         )
+        if show_p0 is True:
+            y0 = f(xf, *p0)
+            ax.plot(xf, y0, label = "p0")
+            for p, v in zip(f, p0):
+                add_fit_parameter(ax, p, v)
     
-    p0 = (bc[np.argmax(counts)], np.diff(bc)[0] * np.sum(counts > 0)/3, max(counts))
     
     ret_all = {
         "values": values,
@@ -203,15 +228,15 @@ parameters:
     
     try:
         fit, cov = scipy.optimize.curve_fit(
-            gauss,
+            f,
             bc,
             counts,
             p0 = p0,
             absolute_sigma = True,
-            sigma = s_counts,
+            sigma = s_counts_fit,
         )
         sfit = np.diag(cov)**.5
-        chi2 = chi_sqr(gauss, bc, counts, s_counts, *fit)
+        chi2 = chi_sqr(f, bc, counts, s_counts, *fit, **kwargs)
        
        
         
@@ -222,17 +247,18 @@ parameters:
         
         
         if isinstance(ax, plt.Axes):
-            xf = np.linspace(min(bins), max(bins), 1000)
-            yf = gaus(xf, *fit)
+            
+            yf = f(xf, *fit)
+            addlabel(ax, f)
             ax.plot(xf, yf, label = f"fit {chi2[-1]}")
-            for par, val, sval in zip(["\\mu", "\\sigma", "A"], fit, sfit):
+            for par, val, sval in zip(f, fit, sfit):
                 add_fit_parameter(ax, par, val, sval)
             ax.legend(loc = "upper right")
             ax.set_ylabel("counts")
         
         
         
-        out = (fit[0], np.abs(fit[1]), sfit[0])
+        out = (fit[1], np.abs(fit[2]), sfit[1])
     except RuntimeError as e:
         ret_all["error"] = e
         out = (float("nan"), float("nan"), float("nan"))
@@ -326,12 +352,6 @@ def median_w(
 
 
 
-def bins(x0, x1, bw):
-    '''    
-    returns bins such that the first bin center is x0
-    (x0 is NOT the left side of the first bin!!!)
-    '''
-    return(np.arange(x0-bw/2, x1+bw, bw))
 
 
 
@@ -347,27 +367,53 @@ def count(x):
            
        }
     )
+
+def s_pois(counts, rng = .682, return_range = False):
+    '''
+    # uses poissonian statistics to calculate asymmetric(!) uncertainties for given counts
+    '''
+    alpha = 1-rng
+    counts_ = np.array(counts)
+    low  = scipy.stats.chi2.ppf(alpha/2, 2*counts_) / 2
+    high = scipy.stats.chi2.ppf(1-alpha/2, 2*counts_ + 2) / 2
+    low[counts_ == 0] = 0.0
     
+    if return_range is True:
+        return(low, high)
+    
+    
+    return(counts_ - low, high - counts_)
     
 
-def chi_sqr(f, x, y, s_y, *pars, ndf = False, ignore_zeros = False):
+def chi_sqr(f, x, y, s_y, *pars, ndf = False, ignore_zeros = False, **kwargs):
     '''
     returns a tuple with chi^2, ndf and reduced chi^2
+    
+    parameters:
+    
+    f: the fucntion that was fitted
+    x, y: x and y values of the data
+    s_y: the uncertainties of the data
+    (can be two arrays for lower and upper encertainties)
+    
+    
+    
     '''
     x = np.array(x)
     y = np.array(y)
     s_y = np.array(s_y)
+    y_f = f(x, *pars)
     
     
     
+    if len(np.shape(s_y)) == 2:
+        s_y = s_y[0]*(y_f < y)+s_y[1]*(y_f >= y)
     if ignore_zeros is True:
-        y, s_y, x = remove_zero(y, s_y, x)
-    
-    
+        y, s_y, x, y_f = remove_zero(y, s_y, x, y_f)
     if ndf is False:
         ndf = len(x) - len(pars)
     
-    y_f = f(x, *pars)
+    
     chi = np.sum(((y - y_f)/s_y)**2)
     
     return(
@@ -783,7 +829,6 @@ def sort(x, *args):
 
 
 
-
 def remove_zero(x, *args):
     '''
     takes arbitraly many arrays and keeps only entries where x is not zero
@@ -794,14 +839,16 @@ def remove_zero(x, *args):
     out = []
     for xi in args:
         if xi is not None:
-            out.append(np.array(xi)[idx_keep])
+            if len(np.shape(xi)) == 2:
+                out.append([xj[idx_keep] for xj in xi])
+            else:
+                out.append(np.array(xi)[idx_keep])
         else:
             out.append(None)
     if len(args) > 0:
         return(x, *out)
     else:
         return(x)
-
 
 def fit_gaus(x, y, absolute_sigma = True, sigma = None, meta = False, **kwargs):
 
