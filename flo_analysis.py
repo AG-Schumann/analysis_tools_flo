@@ -608,7 +608,7 @@ def find_electrode(kr, ax, what = "gate", show_p0 = False, bin_x_offset=0, style
         
 
 
-def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, threshold_max_s = 100):
+def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_fits = False, threshold_max_s = 5):
     '''
         wraper function for find_electrode that will wiggle the bins if a try is unsuccessfull
     
@@ -630,9 +630,14 @@ def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, thresh
             print(f"    iteration {bin_x_offset+1}")
             try:
                 mu, smu, sfit, N, chi2 = np.nan, np.nan, np.inf, np.nan, (np.nan, np.nan, np.nan)
+                if save_fits is True:
+                    save_plots = f"{folder_out}/fits/gate_{run_label}"
+                else:
+                    save_plots = None
+                
                 ret = find_electrode(
                     kr, ax, what = what, show_p0 = show_p0,
-                    save_plots = f"{folder_out}/fits/gate_{run_label}",
+                    save_plots = save_plots,
                     bin_x_offset = bin_x_offset,
                     n_counts_min = 10,
                 )
