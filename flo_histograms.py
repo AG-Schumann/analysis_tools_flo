@@ -414,7 +414,7 @@ def chi_sqr(f, x, y, s_y, *pars, ndf = False, ignore_zeros = False, **kwargs):
         ndf = len(x) - len(pars)
     
     
-    chi = np.sum(((y - y_f)/s_y)**2)
+    chi = float(np.sum(((y - y_f)/s_y)**2))
     
     return(
         (chi, ndf, chi/ndf,

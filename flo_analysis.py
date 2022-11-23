@@ -255,10 +255,23 @@ returns:
     return((fit, sfit, chi2))
     
 
-def correct_drift_time(kr, pos_gate):
-    kr["time_drift"] = kr["time_drift"] - pos_gate
-    kr["time_drift2"] = kr["time_drift2"] - pos_gate
+def correct_drifttime(kr, tpc_corrections):
+    kr["cdt"] = kr["time_drift"] - tpc_corrections[0]
+    kr["cdt2"] = kr["time_drift2"] - tpc_corrections[0]
+    
+    t_end = tpc_corrections[1] - tpc_corrections[0]
+    kr["z"] = kr["cdt"]*tpc_corrections[2]/t_end
+    kr["z2"] = kr["cdt"]*tpc_corrections[2]/t_end
+    
     return(None)
+    
+def correct_s1(kr, tpc_corrections, corr_pars):
+    kr["cS11"] = corr_lin(kr["cdt"], kr["area_s11"], tpc_corrections=tpc_corrections, corr_pars = corr_pars["s11"])
+    kr["cS12"] = corr_lin(kr["cdt"], kr["area_s12"], tpc_corrections=tpc_corrections, corr_pars = corr_pars["s12"])
+    kr["cS1"] = kr["cS11"] + kr["cS12"]
+    
+    return(None)
+    
 
 def correct_s2(kr, lifetime):
     # replace by np.exp((kr["time_drift"]-t_ref)/lifetime)
@@ -271,26 +284,20 @@ def correct_s2(kr, lifetime):
 def lin(x, a, c):
     return(a*x + c)
     
-def corr_lin(x, y, a, c, t_start = position_gate, t_end = position_cathode):
+def corr_lin(x, y, tpc_corrections, corr_pars):
     
-    t0 = (t_start + t_end)/2
+    t_gate, t_cath, *_ = tpc_corrections
+    t_end = (t_cath - t_gate)
+    t0 = t_end/2
     
     y_corr = y * 1
-    y_calc = y / lin(x, a, c)*lin(t0, a, c)
+    y_calc = y / lin(x, *corr_pars)*lin(t0, *corr_pars)
     
-    idx_corr = np.nonzero((x >= t_start) & (x <= t_end))[0]
+    idx_corr = np.nonzero(x <= t_end)[0]
     y_corr[idx_corr] = y_calc[idx_corr]
     
     
     return(y_corr)
-    
-def correct_s1(kr, s1_corr_pars):
-    kr["cS11"] = corr_lin(kr["time_drift"], kr["area_s11"], *s1_corr_pars["s11"])
-    kr["cS12"] = corr_lin(kr["time_drift"], kr["area_s12"], *s1_corr_pars["s12"])
-    kr["cS1"] = kr["cS11"] + kr["cS12"]
-    
-    return(None)
-    
 
 def plot_binned(ax, x, y, bins = 10, marker = ".", label = "", eb_1 = False, eb_2 = False, x_max_plot=False, n_counts_min=20, nresults_min=5, return_plot = False, plt_x_offset = False, save_plots = False, save_plots_compact= False, *args, **kwargs):
     '''
@@ -608,7 +615,7 @@ def find_electrode(kr, ax, what = "gate", show_p0 = False, bin_x_offset=0, style
         
 
 
-def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_fits = False, threshold_max_s = 5):
+def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_fits = False, threshold_max_s = 5, return_fit = True):
     '''
         wraper function for find_electrode that will wiggle the bins if a try is unsuccessfull
     
@@ -616,20 +623,25 @@ def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_f
     
     whats = ["gate", "cath"]
     result = {}
+    fits = {}
     print(run_label)
     
     for what in whats:
+        fits[what] = False
+        
         print(f"  searching {what}")
         
         for bin_x_offset in range(4):
+            iteration = bin_x_offset+1
             fig, ax = fhist.make_fig(1, w = 6, h = 4, reshape_ax=False)
             
-            plt.suptitle(f"Run: {run_label} (Iteration: {bin_x_offset+1})")
+            plt.suptitle(f"Run: {run_label} (Iteration: {iteration})")
 
             
-            print(f"    iteration {bin_x_offset+1}")
+            print(f"    iteration {iteration}")
             try:
                 mu, smu, sfit, N, chi2 = np.nan, np.nan, np.inf, np.nan, (np.nan, np.nan, np.nan)
+                spr, sspr = np.nan, np.nan
                 if save_fits is True:
                     save_plots = f"{folder_out}/fits/gate_{run_label}"
                 else:
@@ -644,7 +656,7 @@ def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_f
                 if ret is False:
                     raise ValueError("got False from find_electrode")
                 mu, smu, spr, sspr, N, (fit, sfit, cov, chi2) = ret
-
+                fits[what] = (fit, sfit, cov, chi2)
             except Exception as e:
                 print(e)
             finally:
@@ -652,17 +664,23 @@ def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_f
                     left = .1,
                     right = .98,
                 )
-                plt.savefig(f"{folder_out}/{what}_for_run_{run_label}_iteration{bin_x_offset+1}.png", dpi = 200)
+                plt.savefig(f"{folder_out}/{what}_for_run_{run_label}_iteration{iteration}.png", dpi = 200)
                 plt.close()
             if smu < threshold_max_s:
                 break
 
         result[f"dt_{what}"] = mu
         result[f"sdt_{what}"] = smu
+        result[f"sigma_{what}"] = spr
+        result[f"ssigma_{what}"] = sspr
         result[f"N_{what}"] = N
         result[f"chi2_{what}"] = chi2[2]
+        result[f"i_{what}"] = iteration
     print(f"{run_label} done")
-    return(result)
+    if return_fit is not True:
+        return(result)
+    else:
+        return(result, fits)
 
 
 
@@ -888,8 +906,9 @@ def get_kr_lifetime_from_run(kr, field = "time_decay_s1", bins = None, bw = 50, 
     
 
     
-def fit_s1_field(kr, field, bins_dt, ax = False,
-    t_start = min(S1_correction_window), t_end = max(S1_correction_window),
+def fit_s1_field(kr, field, bins_dt,
+    tpc_corrections,
+    ax = False,
     cut_after_cathode = 10,
     *args, **kwargs
 ):
@@ -901,23 +920,21 @@ def fit_s1_field(kr, field, bins_dt, ax = False,
     
     '''
     
-    
-    t0 = (t_start + t_end)/2
+    t_gate, t_cath, h_tpc, t_start, t_end = tpc_corrections
+    t0 = (t_cath - t_gate)/2
     
     
     kr_ = kr.copy()
-    t_max = False
+    t_max = 0
     if cut_after_cathode is not False:
-        t_max = position_cathode + cut_after_cathode
+        t_max = t_cath + cut_after_cathode
         # print(f"cutting dt at {t_max:.2f}")
-        
     
     
     
     x, y, sdy, sy, *_ = plot_binned(
         ax, kr["time_drift"], kr[f"area_{field}"], label = f"uncorrected (n={len(kr)})", bins=bins_dt,
         eb_1 = True, eb_2 = True,
-        x_max_plot = t_max,
         *args, **kwargs
     )
     
@@ -943,11 +960,11 @@ def fit_s1_field(kr, field, bins_dt, ax = False,
     sfit = list(map(float, sfit))
     
     chi2 = fhist.chi_sqr(lin, xf, yf, syf, *fit)
-
+    
     xc = np.linspace(t_start, t_end, 1000)
     ycf = lin(xc, *fit)
     
-    corr_pars = (*fit, t_start, t_end)
+    corr_pars = fit
 
     if ax is not False:
         ax.set_title(field.upper())
@@ -964,7 +981,7 @@ def fit_s1_field(kr, field, bins_dt, ax = False,
         
         
         # correcting (just for plotting)
-        kr[f"c{field.upper()}"] = corr_lin(kr["time_drift"], kr[f"area_{field}"], *corr_pars)
+        kr[f"c{field.upper()}"] = corr_lin(kr["time_drift"], kr[f"area_{field}"], tpc_corrections = tpc_corrections, corr_pars = corr_pars)
         
         xc, yc, sdyc, syc, *_ = plot_binned(
             ax, kr["time_drift"], kr[f"c{field.upper()}"], label = f"corrected", bins=bins_dt,
@@ -973,7 +990,8 @@ def fit_s1_field(kr, field, bins_dt, ax = False,
 
         )
         ax.legend(loc = "lower right")
-        
+
+    
     return(corr_pars, (fit, sfit, chi2))
 
 

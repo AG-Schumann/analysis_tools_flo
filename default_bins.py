@@ -12,15 +12,19 @@ def make_bins(x0, x1, bw):
 
 
 
+
+
+tpc_corrections = (3.40, 42.24, 69, 5, 40)
+
+
 default_bins = {}
 default_bw = {}
 
 
 # default variables
-position_gate = 3.5 
-position_cathode = 42.2
-S1_correction_window = (5, 41)
-
+position_gate = tpc_corrections[0]
+position_cathode = tpc_corrections[1]
+S1_correction_window = tpc_corrections[-2:]
 
 sigma_position_gate = .2
 sigma_position_cathode = .3
@@ -41,7 +45,7 @@ bw_drift = 2
 bw_drift_aa = 1 # aa = above anode
 
 # this allows us to have the bin boundries exactly at the s1 correction window border
-bw_s1_dt = np.diff(S1_correction_window)/18
+bw_s1_dt = np.diff(tpc_corrections[-2:])/20
 
 bw_s1_area = 10
 bw_s2_area = 200

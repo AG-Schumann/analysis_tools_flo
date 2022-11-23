@@ -149,7 +149,7 @@ sigmoid = fit_function(
     parameters = ["mu", "sigma", "y0", "y1"],
     parameters_tex = ["\\mu", "\\sigma", "y_{{0}}", "y_{{1}}"],
     formula = "(y1-y0)/(1+exp(mu-sigma)/sigma) + y0",
-    formula_tex = "$\\frac{{(y_1 - y_0)}}{{1+\\frac{{exp((\\mu-x)}}{{sigma}}}} + y_0$",
+    formula_tex = "$\\frac{{(y_1 - y_0)}}{{1+\\frac{{exp((\\mu-x)}}{{\\sigma}}}} + y_0$",
     docstring = '''
 A sigoid function that goes from y0 to y1 via a spread of "width" sigma around mu
 
@@ -190,7 +190,7 @@ sigmoid_lin = fit_function(
     parameters = ["mu", "sigma", "y0", "y1", "a"],
     parameters_tex = ["\\mu", "\\sigma", "y_{{0}}", "y_{{1}}", "a"],
     formula = "((y1-y0)/(1+exp(mu-sigma)/sigma) + y0) * (a*t + 1)",
-    formula_tex = "$(\\frac{{(y_1 - y_0)}}{{1+\\frac{{exp((\\mu-x)}}{{sigma}}}} + y_0) (a\\cdot x + 1)$",
+    formula_tex = "$(\\frac{{(y_1 - y_0)}}{{1+\\frac{{exp((\\mu-x)}}{{\\sigma}}}} + y_0) (a\\cdot x + 1)$",
     docstring = '''
 A sigoid function that is multiplied by (a*t + 1)
 

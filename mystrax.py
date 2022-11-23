@@ -224,84 +224,10 @@ def get_krskru(kr):
     kru = kr[~kr["s2_split"]]
     return(kr[kr["s2_split"]], kr[~kr["s2_split"]])
 
-@flo_decorators.silencer
-def load_run_kr_old(runs, config = False, gs = False, W = 13.5, peaks = False, context = context_sp, calibrate = True):
-    '''
-    returns sp_krypton and calibration data of runs
-    set peaks = true to also get peaks signals 
-    
-    calibration data of first run in runs is used for all
-    '''
-    t_start = datetime.now()
-    
-    if (isinstance(runs, list) | isinstance(runs, np.ndarray)):
-        run = runs[0]
-        runs_str = [f"{r:0>5}" for r in runs]
-    else:
-        run = runs
-        runs_str = f"{run:0>5}"
-    
-    
-    if config is False:
-        config = default_config
-        
-    
-    
-    print("start loading runs")    
-    sp = context.get_array(runs_str, "sp_krypton", config = config)
-    print("loading done")
-    sp = sp[sp["is_event"]]
-    
-    calibration = False
-    
-    if calibrate is True:
-        out = None
-        
-        calibration = get_calibration_data(run)
-        if len(calibration) == 0:
-            print("no calibration data found")
-            calibration = False
-        if len(calibration) > 1:
-            print(f"multiple calibration data found: {len(calibration)}")
-            calibration = calibration[0]
-        elif len(calibration) == 1:
-            calibration = calibration[0]
-        
-        
-        
-        # corrections function from flo_analysis.py
-        if calibration is not False:
-            print("correcting S1 & S2")
-            correct_s1(sp, calibration["s1_corr_pars"])
-            correct_s2(sp, lifetime = calibration["elifetime"])
-        else:
-            print("\33[31mNo automatic S1 & S2 correction!\33[0m")
-            
-        if gs is not False:
-            sp["energy_s1"] = sp["cS1"] / gs[0] * W
-            sp["energy_s2"] = sp["cS2"] / gs[1] * W
-            sp["energy_total"] = sp["energy_s1"] + sp["energy_s2"]
-    
-    
-    if peaks is False:
-        t_end = datetime.now()
-        print(f"all done in {t_end - t_start}")
-        return(sp, calibration)
-        
-        
-    print("start loading peaks")
-    peaks = context.get_array(runs_str, "peaks", config = config)
-    print("loading done, filtering")
-    peaks = peaks[np.in1d(peaks["time"], sp["time_signals"].reshape(-1))]
-    print("filtering done")
-    
-    t_end = datetime.now()
-    print(f"all done in {t_end - t_start}")
-        
-    return(sp, calibration, peaks)
+
 
 @flo_decorators.silencer
-def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, context = context_sp, return_context = False, correct = True, *args, **kwargs):
+def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, context = context_sp, return_db = False, correct = True, *args, **kwargs):
     '''
     returns sp_krypton and calibration data of runs
     
@@ -319,7 +245,7 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
     
     if "calibrate" in kwargs:
         print("\33[41mlegacy parameter 'calibrate' was used\33[0m")
-        correct = kwargs["calibrate"]
+        correct = calibrate
     
     
     
@@ -341,18 +267,25 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
     sp = context.get_array(runs_str, "sp_krypton", config = config)
     print("loading done")
     sp = sp[sp["is_event"]]
-    db_dict = False
-    
     calibration = False
+    
+    
+    db = list(mycol.find({"run":{"$in": runs}}))
+    db_dict = {db_i["run"]:db_i for db_i in db}
+
+        
+    
     if correct is True:
-        db = list(mycol.find({"run":{"$in": runs}}))
-        db_dict = {db_i["run"]:db_i for db_i in db}
         calibration = db_dict
         if "run_id" not in sp.dtype.names:
             # correct only one
-            print("correcting single run")
-            correct_s1(sp, db[0]["s1_corr_pars"])
-            correct_s2(sp, lifetime = db[0]["elifetime"])
+            calibration = db[0]
+            print("correcting single run: drifttime", end = "")
+            correct_drifttime(sp, tpc_corrections = calibration["tpc_corrections"])
+            print(", S1", end = "")
+            correct_s1(sp, tpc_corrections = calibration["tpc_corrections"], corr_pars = calibration["s1_corr_pars"])
+            print(", S2", end = "")
+            correct_s2(sp, lifetime = calibration["elifetime"])
             
         else:
             runs_found = np.unique(sp["run_id"])
@@ -361,12 +294,15 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
 
             out = None
             for run in runs_found:
-                print(f"{run}", end = ", ")
+                print(f"\n  - {run}:", end = "")
                 try:
                     sp_ = sp[sp["run_id"] == run]
                     calibration = db_dict[run]
-
-                    correct_s1(sp_, calibration["s1_corr_pars"])
+                    print(" dt", end = "")
+                    correct_drifttime(sp_, tpc_corrections = calibration["tpc_corrections"])
+                    print(", S1", end = "")
+                    correct_s1(sp_, tpc_corrections=calibration["tpc_corrections"], corr_pars=calibration["s1_corr_pars"])
+                    print(", S2", end = "")
                     correct_s2(sp_, lifetime = calibration["elifetime"])
                     if out is None:
                         out = sp_
@@ -381,11 +317,14 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
             sp["energy_s2"] = sp["cS2"] / gs[1] * W
             sp["energy_total"] = sp["energy_s1"] + sp["energy_s2"]
         
-    print("correcting done")
+    print("\ncorrecting done")
     
     
     out = []
-        
+    if return_db is True:
+        out.append(db_dict)
+    
+    
     if peaks is True:
         print("start loading peaks")
         peaks = context.get_array(runs_str, "peaks", config = config)
@@ -397,10 +336,11 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
     t_end = datetime.now()
     print(f"all done in {t_end - t_start}")
         
-    context_out = None
-    if return_context is True:
-        out.append(context)
-    return(sp, db_dict, *out)
+    if len(out) > 0:
+        return(sp, *out)
+    else:
+        return(sp)
+
 
 
 
