@@ -293,7 +293,7 @@ def corr_lin(x, y, tpc_corrections, corr_pars):
     y_corr = y * 1
     y_calc = y / lin(x, *corr_pars)*lin(t0, *corr_pars)
     
-    idx_corr = np.nonzero(x <= t_end)[0]
+    idx_corr = np.nonzero((x >= 0) & (x <= t_end))[0]
     y_corr[idx_corr] = y_calc[idx_corr]
     
     
@@ -578,7 +578,7 @@ def find_electrode(kr, ax, what = "gate", show_p0 = False, bin_x_offset=0, style
             plt_ = ax.plot(x, y, ".", label = f"Data (bw: {bw} µs, N: {N:.0f})")[0]
             ax.axvline(min(S1_correction_window), label = "start of correction", **style_cathode)
             mu, smu, spr, sspr, rest = fit_gate(ax, x, y, sy, show_p0 = show_p0)
-            
+            leg_pos = "upper right"
 
         elif what == "cath":
             counts, bins_x = np.histogram(data_x, bins_x_ref)
@@ -591,7 +591,7 @@ def find_electrode(kr, ax, what = "gate", show_p0 = False, bin_x_offset=0, style
             plt_ = ax.plot(x, y, ".", label = f"Data (bw: {bw} µs, N: {N:.0f})")[0]
             ax.axvline(max(S1_correction_window), label = "end of correction", **style_cathode)
             mu, smu, spr, sspr, rest = fit_cathode(ax, x, y, sy, show_p0 = show_p0)
-
+            leg_pos = "upper left"
         
         
         xlim = ax.get_xlim()
@@ -600,11 +600,11 @@ def find_electrode(kr, ax, what = "gate", show_p0 = False, bin_x_offset=0, style
         
         
         ax.axvline(mu, color = "green")
-        ax.axvspan(mu - smu, mu + smu, color = "green", alpha = .2)
+        ax.axvspan(mu - smu/2, mu + smu/2, color = "green", alpha = .2)
         ax.axvspan(mu - spr/2, mu + spr/2, color = "green", alpha = .1)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
-        ax.legend(loc = "upper right")
+        ax.legend(loc = leg_pos)
         return(mu, smu, spr, sspr, N, rest)
         
     except Exception as e:

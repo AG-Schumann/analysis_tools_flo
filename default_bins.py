@@ -51,7 +51,10 @@ bw_s1_area = 10
 bw_s2_area = 200
 
 bins_drift = np.arange(-bw_drift/2, 60+bw_drift/2, bw_drift)
-default_bins["drifttime_all"] = bins_drift,
+default_bins["cdt"] = np.arange(0, 42, 2)
+default_bins["cdt_extended"] = np.arange(-10, 62, 2)
+
+default_bins["drifttime_all"] = bins_drift
 default_bins["drifttime_below_anode"] = bins_drift[bins_drift > position_gate]
 default_bins["drifttime_above_anode"] = np.arange(-bw_drift_aa/2, position_gate+bw_drift_aa*2/3, bw_drift_aa)
 default_bins["drifttime_fine"] = np.arange(-bw_drift_aa/2, 40+bw_drift_aa*2/3, bw_drift_aa)

@@ -44,6 +44,18 @@ energies_signals = {
 }
 
 
+# description for sp_krypton exits
+DEVELOPER_fails={
+    0: "no peaks in event",
+    1: "less than 2 large peaks",
+    2: "less than 3 large peaks",
+    3: "first S1 area too large",
+    4: "second S1 area too large",
+    5: "decay time limit exceeded",
+    6: "drift time limit exceeded",
+    7: "first S2 smaller than first S1 (area)",
+    8: "first S1 smaller than second S1 (area)",
+}
 
 
 
@@ -85,7 +97,16 @@ def db_dict():
     )
 
 
-
+def draw_peak(ax, p, t0 = False, label="", show_area = False, **kwargs):
+    if t0 is False:
+        t0 = p["time"][0]
+    t_offs = p["time"]-t0
+    y = np.trim_zeros(p["data"], trim = "b")
+    x = t_offs+np.arange(0, len(y))*p["dt"]
+    if show_area:
+        label = f"{label}({p['area']:.1f} PE)"
+    ax.plot(x, y, label = label, **kwargs)
+    
 
 
 def draw_kr_event(ax, event, show_peaks = "0123", show_peaktime = False, leg_loc = False, t_ref = 0, **kwargs):
@@ -222,32 +243,65 @@ def get_krskru(kr):
     '''
     krs = kr[kr["s2_split"]]
     kru = kr[~kr["s2_split"]]
+
     return(kr[kr["s2_split"]], kr[~kr["s2_split"]])
 
 
+def get_min_peaks(kr, merge = True):
+    '''
+    returns events that have the minimum number of large peaks
+    (split = 4, unsplit = 3)
+    
+    set parameter to False if krs and kru should be returend seperately
+    
+    '''
+    
+    
+    krs, kru = get_krskru(kr)
+    krs = krs[krs["n_peaks_large"] == 4]
+    kru = kru[kru["n_peaks_large"] == 3]
+
+    if merge is True:
+        return(
+            np.append(krs, kru)
+        )
+    return(krs, kru)
+    
 
 @flo_decorators.silencer
-def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, context = context_sp, return_db = False, correct = True, *args, **kwargs):
+def load_run_kr(runs, config = False, mconfig = None, gs = False, W = 13.5, return_peaks = False, context = context_sp, return_db = False, correct = True, filter_events = True, *args, **kwargs):
     '''
     returns sp_krypton and calibration data of runs
     
     parameters:
     config (False): if given, this config is used instead of the default custom config
+    mconfig (False): modifications to the default config when loading data, overrules default parameters
+        use this if you just want to add/modify a few paramters and do not want to take care of default config
+    
     gs (False): tuple of g1 and g2, if given, this is used to calculate the energy of the peak
     W (13.5): required to calculate the Energy with g1 and g2
-    peaks (False): whether or not to also return the peaks of the runs
+    return_peaks (False): whether or not to also return the peaks of the runs
         (WARNING: this might take some time as all peaks have to be loaded first and are later filtered before returning to save RAM.
         the event peak data is also stored in sp_krypton though, so this should not be needed anymore)
     context (context_sp): which context to laod data from
     correct (True):
         Whether or not to apply the S1 and S2 corrections (if) found in the database
+    filter_events (True):
+        whether or not to remove events that have "is_event" set to False
+        
     '''
     
+    
     if "calibrate" in kwargs:
-        print("\33[41mlegacy parameter 'calibrate' was used\33[0m")
+        print("\33[41mlegacy parameter 'calibrate' was used. Use 'correct' instead\33[0m")
         correct = calibrate
+    if "peaks" in kwargs:
+        print("\33[41mlegacy parameter 'peaks' was used. Use 'return_peaks' instead\33[0m")
+        return_peaks = peaks
     
     
+    if mconfig is None:
+        mconfig = {}
     
     
     
@@ -255,6 +309,9 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
     t_start = datetime.now()
     if config is False:
         config = default_config
+    
+    config = {**config, **mconfig}
+    
     
     
     if isinstance(runs, int):
@@ -264,10 +321,20 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
     print(runs_str)
 
     print("start loading data")    
+    
+    
+    print("  \33[34mconfig:\33[0m")
+    for key, value in config.items():
+        print(f"    \33[35m{key}:\33[0m {value}")
+    
+    
     sp = context.get_array(runs_str, "sp_krypton", config = config)
     print("loading done")
-    sp = sp[sp["is_event"]]
+    if filter_events:
+        sp = sp[sp["is_event"]]
+    
     calibration = False
+        
     
     
     db = list(mycol.find({"run":{"$in": runs}}))
@@ -290,7 +357,7 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
         else:
             runs_found = np.unique(sp["run_id"])
             # correct multiple
-            print("correcting multple runs", end = ", ")
+            print("correcting multple runs", end = ": ")
 
             out = None
             for run in runs_found:
@@ -325,7 +392,7 @@ def load_run_kr(runs, config = False, gs = False, W = 13.5, peaks = False, conte
         out.append(db_dict)
     
     
-    if peaks is True:
+    if return_peaks is True:
         print("start loading peaks")
         peaks = context.get_array(runs_str, "peaks", config = config)
         print("loading done, filtering")
