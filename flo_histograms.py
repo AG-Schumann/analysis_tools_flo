@@ -1,3 +1,5 @@
+import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
@@ -6,7 +8,6 @@ import scipy.optimize
 from scipy.special import erf
 from matplotlib.patches import Rectangle
 from datetime import datetime
-import sys
 import inspect
 from threading import Thread, Event
 
@@ -37,8 +38,14 @@ str_tau_kr_lit = f"τ = ({tau_kr_lit:.1f} ± {stau_kr_lit:.1f}) ns"
 label_tau_kr_lit = f"$\\tau = ({tau_kr_lit:.1f} \\pm {stau_kr_lit:.1f})$ ns"
 
 
-
-
+def make_folder(path):
+    try:
+        os.mkdir(path)
+        print(f"created folder: {path}")
+    except FileExistsError:
+        print(f"folder exists already: {path}")
+        
+    return(None)
 
 
 def make_dict(**kwargs):
@@ -296,16 +303,43 @@ def median(x, percentile = 68.2, clean = True, ax=False, *args, **kwargs):
 
 
 
-def mean(x, percentile = 68.2, clean = True, *args, **kwargs):
+def mean(x, clean = True, *args, **kwargs):
     x_ = np.array(x)*1
     if clean is True:
         x_ = x_[np.isfinite(x_)]
 
-    med = np.mean(x)
-    mad = np.std(x, ddof = 1)
-    unc_med = mad/len(x)**.5
+    med = np.mean(x_)
+    mad = np.std(x_, ddof = 1)
+    unc_med = mad/len(x_)**.5
     
     return(med, mad, unc_med)
+
+
+
+def mean_w(x, sx, clean = True, *args, **kwargs):
+    '''
+    weighted mean with uncertainty
+    
+    weights are calculated from sx by 1/sx**2 (inverse variance)
+    '''
+    x_ = np.array(x)*1
+    sx_ = np.array(sx)*1
+    
+    if clean is True:
+        _, x_, sx_ = remove_zero((np.isfinite(x_) & np.isfinite(sx_) & (sx_ > 0)), x_, sx_)
+    
+    w = sx_**-2
+    w_ = w/np.sum(w)
+        
+        
+    mean = np.sum(w_ * x_)
+    std = np.std(x_, ddof = 1)
+    # from Kamke
+    unc_mean = 1/np.sum(w)**.5
+    
+    return(mean, std, unc_mean)
+
+
 
 
 def median_w(
@@ -661,7 +695,7 @@ def dp(message = ""):
 def make_2d_hist_plot(
         x_data,
         y_data,
-        ax_ = False,
+        ax = False,
         bins_x = None, # np.logspace(0,5,100)
         bins_y = None, # np.logspace(1,4,100)
         aowp = True,
@@ -672,15 +706,20 @@ def make_2d_hist_plot(
     '''
     creates a 2d histogram (eg. area over width) into ax_ (if false, plots directly)
     'aowp' (area over width plot): sets scales to log and adds labels to axis
+       (acutally it is an width over area plot....)
     'colorbar_label': if not empty string, adds a colorbar with that label
     'bins_x/y' uses default values if not specified: np.logspace(0,5,100) and np.logspace(1,4,100)
     
     '''
+    if "ax_" in kwargs:
+        print("\33[31musing old parameter 'ax_' please use ax instead\33[0m")
+        ax = ax_
+    
     try:
         len(x_data)
         len(y_data)
     except TypeError:
-        raise TypeError("ax_ must is the third parameter!")
+        raise TypeError("ax must is the third parameter!")
     
     
     if bins_x is None:
@@ -712,20 +751,19 @@ def make_2d_hist_plot(
     
     
     
-    
-    im = ax_.pcolormesh(bins_x, bins_y, counts.T, norm=LogNorm(), *args, **kwargs)
-    if colorbar_label:
-        cb = plt.colorbar(im, ax=ax_, label=colorbar_label)
-    
-    if aowp:
-        ax_.set_xscale('log')
-        ax_.set_yscale('log')
+    if isinstance(ax, plt.Axes):
+        im = ax.pcolormesh(bins_x, bins_y, counts.T, norm=LogNorm(), *args, **kwargs)
+        if colorbar_label is not False:
+            cb = plt.colorbar(im, ax=ax, label=colorbar_label)
+        
+        if aowp:
+            ax.set_xscale('log')
+            ax.set_yscale('log')
 
-        ax_.set_xlabel(defaults["2d_hist_label_area"])
-        ax_.set_ylabel(defaults["2d_hist_label_width"])
-    
-    if not ax_:
-        fig.show()
+            ax.set_xlabel(defaults["2d_hist_label_area"])
+            ax.set_ylabel(defaults["2d_hist_label_width"])
+        
+        
     
     return((counts, bin_centers_x, bin_centers_y))
 

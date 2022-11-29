@@ -330,7 +330,7 @@ def plot_binned(ax, x, y, bins = 10, marker = ".", label = "", eb_1 = False, eb_
 
 
 
-def get_binned_data(dt, area, bins, f_median = fhist.median_gauss, n_counts_min=20, nresults_min=5, save_plots = False, save_plots_prefix="", save_plots_suffix="", save_plots_settings=False, save_plots_compact = False, *args, **kwargs):
+def get_binned_data(dt, area, bins, f_median = fhist.median_gauss, n_counts_min=20, nresults_min=5, save_plots = False, save_plots_prefix="", save_plots_suffix="", save_plots_settings=False, save_plots_compact = True, *args, **kwargs):
     '''
     helper function for get_e_lifetime_from_run
     bins area by dt and calculates median statistics
@@ -351,7 +351,7 @@ def get_binned_data(dt, area, bins, f_median = fhist.median_gauss, n_counts_min=
     
     kwargs_add = {}
     if (save_plots is not False) & ("ax" not in inspect.getfullargspec(f_median).args):
-        # does not make sense to plot something if the function dies not plot something
+        # does not make sense to plot something if the function does not plot something
         print(f"do not save into {save_plots} (args: {inspect.getfullargspec(f_median).args})")
         save_plots = False
         
@@ -363,7 +363,7 @@ def get_binned_data(dt, area, bins, f_median = fhist.median_gauss, n_counts_min=
         if save_plots_compact is True:
             ld_old = ldata
             ldata = int(np.sum([1 for x in binned_data.values() if len(x) >= n_counts_min]))
-            print(f"saving plots compact ({ld_old} --> {ldata})")
+            # print(f"saving plots compact ({ld_old} --> {ldata})")
         fig, axs = fhist.make_fig(n_tot = ldata, w = 6, h = 4)
     
     j = 0
@@ -570,11 +570,11 @@ def find_electrode(kr, ax, what = "gate", show_p0 = False, bin_x_offset=0, style
                 data_x, data_y, bins_x_ref,
                 show_p0=show_p0,
                 save_plots_suffix = f"iteration_{bin_x_offset+1}",
+                #prefix_png
                 **kwargs
             )
             y, sy, l, x = fhist.remove_zero(y, sy, l, x)
             N = np.sum(l)
-            
             plt_ = ax.plot(x, y, ".", label = f"Data (bw: {bw} µs, N: {N:.0f})")[0]
             ax.axvline(min(S1_correction_window), label = "start of correction", **style_cathode)
             mu, smu, spr, sspr, rest = fit_gate(ax, x, y, sy, show_p0 = show_p0)
@@ -615,35 +615,41 @@ def find_electrode(kr, ax, what = "gate", show_p0 = False, bin_x_offset=0, style
         
 
 
-def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_fits = False, threshold_max_s = 5, return_fit = True):
+def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_fits = False, N_bin_offsets = 4, return_fit = True, prefix_png = ""):
     '''
         wraper function for find_electrode that will wiggle the bins if a try is unsuccessfull
     
     '''
-    
+    fmt = "8.1f"
     whats = ["gate", "cath"]
     result = {}
     fits = {}
     print(run_label)
     
     for what in whats:
-        fits[what] = False
-        
+        fits[what] =  [-1]*N_bin_offsets
+        result_tmp = {
+            "mu":     [-1]*N_bin_offsets,
+            "smu":    [-1]*N_bin_offsets,
+            "sigma":  [-1]*N_bin_offsets,
+            "ssimga": [-1]*N_bin_offsets,
+        }
         print(f"  searching {what}")
         
-        for bin_x_offset in range(4):
+        for bin_x_offset in range(N_bin_offsets):
             iteration = bin_x_offset+1
             fig, ax = fhist.make_fig(1, w = 6, h = 4, reshape_ax=False)
             
             plt.suptitle(f"Run: {run_label} (Iteration: {iteration})")
 
             
-            print(f"    iteration {iteration}")
+            print(f"{iteration:>6}: ", end = "")
+            
             try:
                 mu, smu, sfit, N, chi2 = np.nan, np.nan, np.inf, np.nan, (np.nan, np.nan, np.nan)
                 spr, sspr = np.nan, np.nan
                 if save_fits is True:
-                    save_plots = f"{folder_out}/fits/gate_{run_label}"
+                    save_plots = f"{folder_out}/fits/gate_{prefix_png}{run_label}"
                 else:
                     save_plots = None
                 
@@ -651,12 +657,20 @@ def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_f
                     kr, ax, what = what, show_p0 = show_p0,
                     save_plots = save_plots,
                     bin_x_offset = bin_x_offset,
-                    n_counts_min = 10,
+                    n_counts_min = 5,
                 )
                 if ret is False:
                     raise ValueError("got False from find_electrode")
                 mu, smu, spr, sspr, N, (fit, sfit, cov, chi2) = ret
-                fits[what] = (fit, sfit, cov, chi2)
+                fits[what][bin_x_offset] = (fit, sfit, cov, chi2)
+                
+                result_tmp["mu"][bin_x_offset] = mu
+                result_tmp["smu"][bin_x_offset] = smu
+                result_tmp["sigma"][bin_x_offset] = spr
+                result_tmp["ssimga"][bin_x_offset] = sspr
+                
+                result[f"chi2_{what}_{bin_x_offset}"] = chi2[2]
+                print(f" µ:({mu:{fmt}} +- {smu:{fmt}}) µs, σ:({spr:{fmt}} +- {sspr:{fmt}}) µs (χ² = {chi2[2]:{fmt}}) ")
             except Exception as e:
                 print(e)
             finally:
@@ -664,18 +678,20 @@ def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_f
                     left = .1,
                     right = .98,
                 )
-                plt.savefig(f"{folder_out}/{what}_for_run_{run_label}_iteration{iteration}.png", dpi = 200)
+                plt.savefig(f"{folder_out}/{what}_for_run_{prefix_png}{run_label}_iteration{iteration}.png", dpi = 200)
                 plt.close()
-            if smu < threshold_max_s:
-                break
-
-        result[f"dt_{what}"] = mu
-        result[f"sdt_{what}"] = smu
-        result[f"sigma_{what}"] = spr
-        result[f"ssigma_{what}"] = sspr
-        result[f"N_{what}"] = N
-        result[f"chi2_{what}"] = chi2[2]
-        result[f"i_{what}"] = iteration
+            
+        # merge results here
+        mean_mu, std, smean_mu = fhist.mean_w(result_tmp["mu"], result_tmp["smu"])
+        mean_sigma, std, smean_sigma = fhist.mean_w(result_tmp["sigma"], result_tmp["ssimga"])
+        
+        print(f"  Means  µ:({mean_mu:{fmt}} +- {smean_mu:{fmt}}) µs, σ:({mean_sigma:{fmt}} +- {smean_sigma:{fmt}}) µs")
+        result[f"dt_{what}"] = mean_mu
+        result[f"sdt_{what}"] = smean_mu
+        result[f"sigma_{what}"] = mean_sigma
+        result[f"ssigma_{what}"] = smean_sigma
+        
+        
     print(f"{run_label} done")
     if return_fit is not True:
         return(result)
