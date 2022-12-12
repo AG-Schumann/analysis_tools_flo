@@ -47,7 +47,23 @@ def make_folder(path):
         
     return(None)
 
+def fraction_exp(a = 0, b = np.inf, tau = tau_kr_lit):
+    '''
+    calculates the integral of a normalized expoential function from a to b
+    
+    parameters:
+      a (default: 0): start of integration
+      b (default: inf): end of integration
+      tau (default: 222.6): mean lifetime of exponential
+    '''
+    return(np.exp(-a/tau) - np.exp(-b/tau))
 
+def frac_sigmas(sigmas):
+    '''
+        calculates the area under a normal distribution sigmas sigmas around mu
+    '''
+    return(erf(np.array(sigmas)/(2)**.5))
+    
 def make_dict(**kwargs):
     '''
     a function for lazy people to turn the arguemnts of a fucntion call into a dictionary (via copy paste)
@@ -56,13 +72,24 @@ def make_dict(**kwargs):
         {n:v for n, v in kwargs.items()}
     )
 
-def make_fig(nrows=1, ncols=1, w=6, h=4, reshape_ax = True, n_tot = False, *args, **kwargs):
+def make_fig(nrows=1, ncols=1, w=6, h=4, rax = True, n_tot = False, axis_off = False, *args, **kwargs):
     '''
     creates a figure with nrows by ncols plots
     n_tot: total number of cells, overwrites nrow and ncols, set negative to make plot wider than tall
     set its size to w*ncols and  h*nrows
     returns fig and reshapen ax (as 1d list) elements
+    
+    axis_off (False): turns all axis off. Turn them on again with ax.set_axis_on()
+    
+    
     '''
+    
+    
+    if "reshape_ax" in kwargs:
+        print("\33[31mfound old parameter reshape_ax. Use 'rax' from now on\33[0m")
+        rax = kwargs["reshape_ax"]
+    
+    
     
     if n_tot is not False:
         ncols = int(abs(n_tot)**.5)
@@ -75,11 +102,15 @@ def make_fig(nrows=1, ncols=1, w=6, h=4, reshape_ax = True, n_tot = False, *args
     fig.set_facecolor("white")
     fig.set_dpi(200)
     
-    if reshape_ax is True:
+    if rax is True:
         if isinstance(axs, plt.Axes):
             axs = np.array([axs])
         else:
             axs = axs.reshape(-1)
+
+    if axis_off is True:
+        for ax in axs.reshape(-1):
+            ax.set_axis_off()
             
     return(fig, axs)
 
@@ -95,6 +126,7 @@ def errorbar(
     color = None, capsize = 5,
     linestyle = "", label = "",
     marker = "", plot = False,
+    slimit = False,
     *args, **kwargs):
     
     if plot is True:
@@ -105,6 +137,8 @@ def errorbar(
         color = ax.plot(x, y, marker = marker_plot, color = color, linestyle = linestyle, label = label,  *args, **kwargs)[0].get_color()
         label = None
     
+    if slimit is not False:
+        _, x, y, sy = remove_zero(np.abs(sy) < slimit, x, y, sy)
     
     ax.errorbar(x, y, yerr = sy, label = label, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
 
@@ -458,19 +492,28 @@ def chi_sqr(f, x, y, s_y, *pars, ndf = False, ignore_zeros = False, **kwargs):
     )
 
 
-def binning(x, y, bins):
+def binning(x, y, bins, label="bc"):
     '''
     returns y sorted into x-bins
     x and y need to have the same form
+    
+    label: how to name the bins
+      "bc" (default):  use bin centers as name of bin
+      "br":  use bin range as name of bin
+    
     '''
 
     bin_centers = get_bin_centers(bins)
     bin_ids = np.digitize(x, bins)
+    
+    if label == "br":
+        bnames = [f"{x} to {y}" for x, y in zip(bins[:-1], bins[1:])]
+    else:
+        bnames = bin_centers
+    
 
-
-    bin_contents = {bin_center:[] for bin_center in bin_centers}
-
-    _ = [bin_contents[bin_centers[i-1]].append(y_) for i, y_ in zip(bin_ids, y) if (i > 0) & (i <= len(bin_centers))]
+    bin_contents = {bn:[] for bn in bnames}
+    _ = [bin_contents[bnames[i-1]].append(y_) for i, y_ in zip(bin_ids, y) if (i > 0) & (i <= len(bin_centers))]
     
     return(bin_contents)
 
@@ -865,6 +908,11 @@ def sort(x, *args):
         
     return(out)
 
+
+def clean(*args):
+    _ = np.prod([np.isfinite(argi) for argi in args], axis = 0)
+    _, *argsf = remove_zero(_, *args)
+    return(argsf)
 
 
 def remove_zero(x, *args):

@@ -4,6 +4,7 @@ import pandas as pd
 from scipy.optimize import curve_fit
 import flo_histograms as fhist
 import flo_functions as ff
+import analysis_help as fah
 import matplotlib.pyplot as plt
 import decimal
 from default_bins import *
@@ -22,6 +23,17 @@ from datetime import datetime
         # 'b': [0.4605871081950396, 0.3783252192920378, 0.16472936074754693],
     # }
 # }
+
+def enumezip(*args):
+    '''
+    generator that can be used when a zip-generator should also yield the index
+    '''
+    for i, argsi in enumerate(zip(*args)):
+        yield(i, *argsi)
+
+
+
+
     
 def np_array_all(*args):
     out = [-1] * len(args)
@@ -376,9 +388,12 @@ def get_binned_data(dt, area, bins, f_median = fhist.median_gauss, n_counts_min=
             j += 1
             
         if use is True:
-            bc.append(bc_)
-            md.append(f_median(values, *args, **kwargs_add, **kwargs))
-            lens.append(len(values))
+        
+            md_ = f_median(values, *args, **kwargs_add, **kwargs)
+            if False not in np.isfinite(md_):
+                bc.append(bc_)
+                md.append(md_)
+                lens.append(len(values))
     
     if save_plots is not False:
         for ax in axs[j:len(axs)]:
@@ -399,9 +414,11 @@ def get_binned_data(dt, area, bins, f_median = fhist.median_gauss, n_counts_min=
         plt.savefig(fname)
         plt.close()
     
+    
+    
     if len(bc) >= nresults_min:
         median, md_sd, md_unc = zip(*md)
-    
+        
         return(np.array(bc), np.array(median), np.array(md_sd), np.array(md_unc), np.array(lens))
     else:
         return(np.array([]), np.array([]), np.array([]), np.array([]), np.array([]))
@@ -618,9 +635,15 @@ def find_electrode(kr, ax, what = "gate", show_p0 = False, bin_x_offset=0, style
 def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_fits = False, N_bin_offsets = 4, return_fit = True, prefix_png = ""):
     '''
         wraper function for find_electrode that will wiggle the bins if a try is unsuccessfull
-    
     '''
-    fmt = "8.1f"
+    
+    
+    def v(x):
+        if x < 1000:
+            return(f'{x:8.2f}')
+        else:
+            return(f'{x:8.2g}')
+    
     whats = ["gate", "cath"]
     result = {}
     fits = {}
@@ -670,7 +693,7 @@ def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_f
                 result_tmp["ssimga"][bin_x_offset] = sspr
                 
                 result[f"chi2_{what}_{bin_x_offset}"] = chi2[2]
-                print(f" µ:({mu:{fmt}} +- {smu:{fmt}}) µs, σ:({spr:{fmt}} +- {sspr:{fmt}}) µs (χ² = {chi2[2]:{fmt}}) ")
+                print(f" µ:({v(mu)} +- {v(smu)}) µs, σ:({v(spr)} +- {v(sspr)}) µs (χ² = {v(chi2[2])}) ")
             except Exception as e:
                 print(e)
             finally:
@@ -685,7 +708,9 @@ def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_f
         mean_mu, std, smean_mu = fhist.mean_w(result_tmp["mu"], result_tmp["smu"])
         mean_sigma, std, smean_sigma = fhist.mean_w(result_tmp["sigma"], result_tmp["ssimga"])
         
-        print(f"  Means  µ:({mean_mu:{fmt}} +- {smean_mu:{fmt}}) µs, σ:({mean_sigma:{fmt}} +- {smean_sigma:{fmt}}) µs")
+        
+        
+        print(f"  Means  µ:({v(mean_mu)} +- {v(smean_mu)}) µs, σ:({v(mean_sigma)} +- {v(smean_sigma)}) µs")
         result[f"dt_{what}"] = mean_mu
         result[f"sdt_{what}"] = smean_mu
         result[f"sigma_{what}"] = mean_sigma

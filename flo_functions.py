@@ -220,6 +220,51 @@ gauss = fit_function(
     formula_tex = "$A \\exp{{\\frac{{-(x-\\mu)^2}}{{(2 \\sigma)^2}}}}$",
 )
 
+# doublegauss function
+def gaus2(x, A1=1, mu1=0, sigma1=1, A2=1, mu2=0, sigma2=1):
+    return(
+          A1 * np.exp(-(np.array(x)-mu1)**2 / (2*sigma1)**2)
+        + A2 * np.exp(-(np.array(x)-mu2)**2 / (2*sigma2)**2)
+    )
+def f_p0_gaus2(x, y):
+    A1 = max(y)
+    A2 = A1 / 10
+    mu = x[np.argmax(y)]
+    sigma1 = (x[1]-x[0])/5
+    sigma2 = sigma1*10
+    
+    return(A1, mu, sigma1, A2, mu, sigma2)
+    
+    
+gauss2 = fit_function(
+    f = gaus2,
+    f_p0 = f_p0_gaus2,
+    description = "sum of two gaus functions without a constant term",
+    parameters = ["A1", "mu1", "sigma1", "A2", "mu2", "sigma2"],
+    parameters_tex = ["A_1", "\\mu_1", "\\sigma_1", "A_2", "\\mu_2", "\\sigma_2"],
+    formula = "A1 exp(-(x-mu1)^2 /(2 sigma1)^2) + A2 exp(-(x-mu2)^2 /(2 sigma2)^2)",
+    formula_tex = "$A_1 \\exp{{\\frac{{-(x-\\mu_1)^2}}{{(2 \\sigma_1)^2}}}} + A_2 \\exp{{\\frac{{-(x-\\mu_2)^2}}{{(2 \\sigma_2)^2}}}}$",
+)
+
+# gauss function
+def gaussC(x, A=1, mu=0, sigma=1, C = 0):
+    return(
+        A * np.exp(-(np.array(x)-mu)**2 / (2*sigma)**2) + C
+    )
+def f_p0_gaussC(x, y):
+    return(max(y), x[np.argmax(y)], (x[1]-x[0])/5, 0)
+    
+    
+gaussC = fit_function(
+    f = gaussC,
+    f_p0 = f_p0_gaussC,
+    description = "gauss function with constant term",
+    parameters = ["A", "mu", "sigma", "C"],
+    parameters_tex = ["A", "\\mu", "\\sigma", "C"],
+    formula = "A exp(-(x-mu)^2 /(2 sigma)^2)+C",
+    formula_tex = "$A \\exp{{\\frac{{-(x-\\mu)^2}}{{(2 \\sigma)^2}}}}+C$",
+)
+
 
 
 # gauss function

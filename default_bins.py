@@ -36,7 +36,7 @@ default_bw["search_cath"] = 1
 default_bins["search_gate"] = make_bins( 1.5, 10, default_bw["search_gate"])
 default_bins["search_cath"] = make_bins(32,   52, default_bw["search_gate"])
 
-
+default_bins["decay_time"] = make_bins(0, 2500, 100)
 
 
 

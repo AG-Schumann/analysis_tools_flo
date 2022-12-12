@@ -97,38 +97,85 @@ def db_dict():
     )
 
 
-def draw_peak(ax, p, t0 = False, label="", show_area = False, **kwargs):
+def draw_peak(ax, p, t0 = False, label="", show_area = False, label_peaktime = False, show_peaktime = False, **kwargs):
     if t0 is False:
-        t0 = p["time"][0]
+        t0 = p["time"]
     t_offs = p["time"]-t0
     y = np.trim_zeros(p["data"], trim = "b")
     x = t_offs+np.arange(0, len(y))*p["dt"]
-    if show_area:
-        label = f"{label}({p['area']:.1f} PE)"
-    ax.plot(x, y, label = label, **kwargs)
+    props = []
+    if show_area is True:
+        props.append(f"{p['area']:.1f} PE")
+    if label_peaktime is True:
+        props.append(f"{(p['time']-t0)+p['time_to_midpoint']:.0f} ns")
+    
+    if len(props) > 0:
+        props = f" ({', '.join(props)})"
+    else:
+        props = ""
+    plt_i = ax.plot(x, y, label = f"{label}{props}", **kwargs)[0]
+    if show_peaktime is True:
+        ax.axvline((p['time']-t0)+p['time_to_midpoint'], color = plt_i.get_color())
+
+def draw_gauss_peak(ax, p, t0 = False, **kwargs):
+    draw_peak(ax=ax, p=p, t0=t0, **kwargs)
+    if "OK_fit_s" not in p.dtype.names:
+        print("\33[31muse peaks of type 'gaussfit_peaks' for this function\33[0m")
+        return(0)
+    
+    if t0 is False:
+        t0 = p["time"]
+    t_offs = p["time"]-t0
+    y = np.trim_zeros(p["data"], trim = "b")
+    x = t_offs+np.arange(0, len(y))*p["dt"]
+    xp = np.linspace(0, max(x), 1000)
+    
+    
+    for g, label, f in [
+            ("s", "single", straxbra.plugins.GaussfitPeaks.sg),
+            ("d", "double", straxbra.plugins.GaussfitPeaks.dg)
+    ]:
+        if p[f"OK_fit_{g}"] is np.True_:
+            pars, units = straxbra.plugins.GaussfitPeaks.props_fits[g]
+            
+            yf = f(0, xp, *p[f"fit_{g}"])
+            res = p[f'sum_resid_sqr_fit_{g}']
+            
+            ax.plot(xp, yf, label = f"{label} gauss (res/ndf: {res:.1f})")
+            for par, v, sv, u in zip(pars, p[f"fit_{g}"], p[f"sfit_{g}"], units):
+                fhist.add_fit_parameter(ax, par, v, sv, u)
+    
     
 
 
-def draw_kr_event(ax, event, show_peaks = "0123", show_peaktime = False, leg_loc = False, t_ref = 0, **kwargs):
+def draw_kr_event(ax, event, show_peaks = "0123", label_area = True, show_peaktime = False, label_peaktime = False, leg_loc = False, t_ref = 0, t0 = False, **kwargs):
     '''
     plots S1s and S2s into ax
     
     parameters:
     - show peaks: string with numbers from 0 to 4 of whuich peaks to draw
       (default = "0123") ==> all 4 peaks are shown
+    - show_peaktime:
+      show midpoint ime of peak
+    - label_peaktime:
+        add midpoint time of peak to legend
     - leg_loc: set this to a valid legend_loc value to draw the legend,
       leave blank to not draw legend
+    - t0: which time to use as reference. default False.
+      if not given fallback to t_ref
     - t_ref: which peak to use for time reference
       (default: 0, so its the first S1)
-    
     - **kwargs: used to format the plots
     
     '''
+    if t0 is False:
+        if t_ref in [0, 1, 2, 3]:
+            t0 = event["time_signals"][t_ref]
+        else:
+            t0 = 0
     
-    if t_ref in [0, 1, 2, 3]:
-        t0 = event["time_signals"][t_ref]
-    else:
-        t0 = 0
+    # extra offset in case t0 is not first peaks time
+    t_offset_abs = event["time_signals"][0]-t0
     
     
     if event["s2_split"]:
@@ -136,15 +183,26 @@ def draw_kr_event(ax, event, show_peaks = "0123", show_peaktime = False, leg_loc
     else:
         labels = ["first S1", "second S1", "S2"]
     
-    for peak_i, (p_data, t_peak, label) in enumerate(zip(event["data_peaks"], event["time_signals"], labels)):
+    for peak_i, (p_data, t_peak, t_peak_in_event_time, label) in enumerate(zip(event["data_peaks"], event["time_signals"], event["time_peaks"], labels)):
         if str(peak_i) in show_peaks:
             t_offs = t_peak-t0
             y = np.trim_zeros(p_data, trim = "b")
             x = t_offs+np.arange(0, len(y))*event["dt"][peak_i]
             area = event[f"area_s{(peak_i>1)+1}{peak_i%2+1}"]
-            plt_i = ax.plot(x, y, label = f"{label} ({area:.1f} PE)", **kwargs)[0]
+            
+            props = []
+            if label_area is True:
+                props.append(f"{area:.1f} PE")
+            if label_peaktime is True:
+                props.append(f'{event["time_peaks"][peak_i]:.0f} ns')
+            if len(props) > 0:
+                props = f" ({', '.join(props)})"
+            else:
+                props = ""
+            plt_i = ax.plot(x, y, label = f"{label}{props}", **kwargs)[0]
+            
             if show_peaktime is True:
-                ax.axvline(event["time_peaks"][peak_i]+t_offs, color = plt_i.get_color())
+                ax.axvline(event["time_peaks"][peak_i] + t_offset_abs, color = plt_i.get_color())
 
     ax.set_ylabel("signal / PE/sample")
     ax.set_xlabel("time / ns")
@@ -396,7 +454,7 @@ def load_run_kr(runs, config = False, mconfig = None, gs = False, W = 13.5, retu
         print("start loading peaks")
         peaks = context.get_array(runs_str, "peaks", config = config)
         print("loading done, filtering")
-        peaks = peaks[np.in1d(peaks["time"], sp["time_signals"].reshape(-1))]
+        peaks = peaks[np.in1d(peaks["time"], sp["time_large_peaks"].reshape(-1))]
         print("filtering done")
         out.append(peaks)
     
