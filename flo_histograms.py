@@ -37,7 +37,9 @@ stau_kr_lit = 1.1/np.log(2)
 str_tau_kr_lit = f"τ = ({tau_kr_lit:.1f} ± {stau_kr_lit:.1f}) ns"
 label_tau_kr_lit = f"$\\tau = ({tau_kr_lit:.1f} \\pm {stau_kr_lit:.1f})$ ns"
 
-
+def now():
+    return(datetime.now())
+    
 def make_folder(path):
     try:
         os.mkdir(path)
@@ -71,6 +73,12 @@ def make_dict(**kwargs):
     return(
         {n:v for n, v in kwargs.items()}
     )
+
+
+
+
+
+
 
 def make_fig(nrows=1, ncols=1, w=6, h=4, rax = True, n_tot = False, axis_off = False, *args, **kwargs):
     '''
@@ -145,11 +153,37 @@ def errorbar(
     
 
 
+def get_nice_format(*x):
+    '''
+    returns ONE fmt string for all numbers to make them look the same
+    '''
+    y = np.array(x).reshape(-1)
+    y = np.array(np.abs(y[y != None]), dtype = float)
+    log_y = np.log10(y)
+    
+    decis = np.array([np.ceil(max(log_y)), np.floor(min(log_y)-1)])
+    
+    
+    if decis[0] - decis[1] <= 10:
+        
+        # ignore difference, they are in the same leauge
+        if decis[1] < 0:
+            return(f".{-decis[1]:.0f}f")
+        if decis[1] < 3:
+            # default case 
+            return(f".1f")
+        if decis[1] < 5:
+            # default case 
+            return(f".0f")
+        return(f".2e")
+    
+    # large difference or large numbers, use dynamic mode 
+    return(".3g")
+    
 
 
 
-
-def add_fit_parameter(ax, l, p, sp=None, u="", fmt =".1f"):
+def add_fit_parameter(ax, l, p, sp=None, u="", fmt="auto"):
     '''
     adds nicely formated fit results to legend
     
@@ -157,12 +191,16 @@ def add_fit_parameter(ax, l, p, sp=None, u="", fmt =".1f"):
     p: parameter
     sp: uncertainty
     u: unit
+    fmt: format (auto: use get_nice_format)
     
     '''
     
+    if fmt == "auto":
+        fmt = get_nice_format(p, sp)
+    
     brackets = False
     if sp is None:
-        str_ = f"{p:.1f}"
+        str_ = f"{p:{fmt}}"
     else:
         brackets = True
         if (sp < 100 * p) or (sp < 100):
@@ -184,6 +222,12 @@ def add_fit_parameter(ax, l, p, sp=None, u="", fmt =".1f"):
     addlabel(ax, str_)
     
     return(None)
+
+def add_fit_parameters(ax, pars, fit, sfit, units = False, **kwargs):
+    if units is False:
+        units = [""]*len(pars)
+    for par, v, sv, u in zip(pars, fit, sfit, units):
+        add_fit_parameter(ax, par, v, sv, u, **kwargs)
 
 
 
@@ -635,6 +679,8 @@ def get_ETA(t_start, i, N):
 
 
 def get_peaks_from_time_tuple(peaks, time_tuple):
+    if len(time_tuple) > 2:
+        print("\33[31mThis function uses the time tuple as range. use mystrax.get_peaks_by_timestamp() instead\33[0m")
     try: 
         id_start = np.nonzero(peaks["time"] == time_tuple[0])[0][0]
         id_end = np.nonzero(peaks["time"] == time_tuple[1])[0][0]

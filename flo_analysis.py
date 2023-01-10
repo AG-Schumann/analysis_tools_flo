@@ -661,7 +661,7 @@ def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_f
         
         for bin_x_offset in range(N_bin_offsets):
             iteration = bin_x_offset+1
-            fig, ax = fhist.make_fig(1, w = 6, h = 4, reshape_ax=False)
+            fig, ax = fhist.make_fig(1, w = 6, h = 4, rax=False)
             
             plt.suptitle(f"Run: {run_label} (Iteration: {iteration})")
 

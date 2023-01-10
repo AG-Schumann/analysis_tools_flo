@@ -4,6 +4,8 @@ from datetime import datetime
 from flo_analysis import *
 import flo_decorators
 from threading import Thread, Event
+import matplotlib.pyplot as plt
+
 
 # import 
 sys.path.insert(0,"/data/workspace/Flo/straxbra_flo/strax")
@@ -15,9 +17,14 @@ print(f"Strax file:    {strax.__file__}")
 sys.path.insert(0,"/data/workspace/Flo/straxbra_flo/straxbra")
 import straxbra
 print("\33[34mStraxbra:\33[0m")
-print(f"straxbra file:    {straxbra.__file__}")
-print(f"straxbra version: {straxbra.__version__}")
-print(f"SpKrypton version:    {straxbra.plugins.SpKrypton.__version__}")
+print(f"straxbra file:           {straxbra.__file__}")
+# print(f"straxbra version:        {straxbra.__version__}")
+# print(f"SpKrypton version:       {straxbra.plugins.SpKrypton.__version__}")
+# print(f"GaussfitPeaks version:   {straxbra.plugins.GaussfitPeaks.__version__}")
+# print(f"SPKryptonS2Fits version: {straxbra.plugins.SPKryptonS2Fits.__version__}")
+print(f"EventFits version:       {straxbra.plugins.EventFits.__version__}")
+
+
 
 context_sp = straxbra.SinglePhaseContext()
 context_dp = straxbra.XebraContext()
@@ -97,6 +104,12 @@ def db_dict():
     )
 
 
+def filter_peaks(peaks, sp_krypton_s1_area_min = 25, sp_krypton_max_drifttime_ns=500e3 ):
+    ps = peaks[peaks["area"] >= sp_krypton_s1_area_min]
+    idx = np.nonzero(np.diff(ps["time"]) <= sp_krypton_max_drifttime_ns)[0]
+    idx = np.unique(np.append(idx, idx+1))
+    return(ps[idx])
+
 def draw_peak(ax, p, t0 = False, label="", show_area = False, label_peaktime = False, show_peaktime = False, **kwargs):
     if t0 is False:
         t0 = p["time"]
@@ -117,33 +130,36 @@ def draw_peak(ax, p, t0 = False, label="", show_area = False, label_peaktime = F
     if show_peaktime is True:
         ax.axvline((p['time']-t0)+p['time_to_midpoint'], color = plt_i.get_color())
 
-def draw_gauss_peak(ax, p, t0 = False, **kwargs):
-    draw_peak(ax=ax, p=p, t0=t0, **kwargs)
-    if "OK_fit_s" not in p.dtype.names:
-        print("\33[31muse peaks of type 'gaussfit_peaks' for this function\33[0m")
-        return(0)
+def draw_gauss_peak(ax, p, t0 = False, show_pars = True, **kwargs):
+    if show_pars is False:
+        show_pars = []
+    elif show_pars is True:
+        show_pars = [*straxbra.plugins.GaussfitPeaks.props_fits]
+    
     
     if t0 is False:
         t0 = p["time"]
+    draw_peak(ax=ax, p=p, t0=t0, **kwargs)
+    
+    if "OK_fits" not in p.dtype.names:
+        print("\33[31muse peaks of type 'gaussfit_peaks' for this function\33[0m")
+        return(0)
+    
     t_offs = p["time"]-t0
     y = np.trim_zeros(p["data"], trim = "b")
     x = t_offs+np.arange(0, len(y))*p["dt"]
     xp = np.linspace(0, max(x), 1000)
     
     
-    for g, label, f in [
-            ("s", "single", straxbra.plugins.GaussfitPeaks.sg),
-            ("d", "double", straxbra.plugins.GaussfitPeaks.dg)
-    ]:
+    for g, (label, f, fp0, fb, pars, units) in straxbra.plugins.GaussfitPeaks.props_fits.items():
         if p[f"OK_fit_{g}"] is np.True_:
-            pars, units = straxbra.plugins.GaussfitPeaks.props_fits[g]
-            
-            yf = f(0, xp, *p[f"fit_{g}"])
+            yf = f(xp, *p[f"fit_{g}"])
             res = p[f'sum_resid_sqr_fit_{g}']
             
             ax.plot(xp, yf, label = f"{label} gauss (res/ndf: {res:.1f})")
-            for par, v, sv, u in zip(pars, p[f"fit_{g}"], p[f"sfit_{g}"], units):
-                fhist.add_fit_parameter(ax, par, v, sv, u)
+            if g in show_pars:
+                for par, v, sv, u in zip(pars, p[f"fit_{g}"], p[f"sfit_{g}"], units):
+                    fhist.add_fit_parameter(ax, par, v, sv, u)
     
     
 
@@ -273,7 +289,60 @@ def draw_event(ax, event, peaks = False, show_peaks = "0123", show_peaktime = Fa
 
 
 
+def draw_peak_fits(p, fname = False, highlight_best_peak = True, best_fit_i = "auto", title = ""):
+    '''
+        plots all fits for given gaussfitpeak
+    '''
+    props_fits = straxbra.plugins.GaussfitPeaks.props_fits
 
+    fig, axs = fhist.make_fig(n_tot = len(props_fits))
+    
+    if title != "":
+        fig.suptitle(title)
+    
+    xp = np.linspace(0, p["dt"]*p["length"], 1000)
+    for i, (ax, (l, (title, f, p0_f, b_f, pars, units))) in enumerate(zip(axs, props_fits.items())):
+        if best_fit_i == "auto":
+            best_fit_i = p["best_fit"]
+        if (i+1 == best_fit_i) and (highlight_best_peak is True):
+            ax.set_title(f"{title} (best fit)")
+        else:
+            ax.set_title(title)
+        ax.set_xlabel("time / ns")
+        ax.set_ylabel("signal / PE")
+
+        color = ax.plot([])[0].get_color()
+        draw_peak(ax, p, show_area = True, label = "data", color = color)
+        tmid = p["time_to_midpoint"]
+        ax.axvline(tmid, label = f"$t_\\mathrm{{midpoint}}$: {tmid:.1f} ns", color = color, linestyle = "dashed")
+
+
+        fit = p[f"fit_{l}"]
+        sfit = p[f"sfit_{l}"]
+        res = p[f"sum_resid_sqr_fit_{l}"]
+
+        yf = f(xp, *fit)
+
+        ax.plot(xp, yf, label = f"fit ($\\mathrm{{res}}^2_\\mathrm{{red}}$.:{res:.3g})")
+
+
+        for par, v, sv, u in zip(pars, fit, sfit, units):
+            fhist.add_fit_parameter(ax, par, v, sv, u)
+        ax.legend(loc = "upper right")
+
+    plt.subplots_adjust(
+        hspace = .3,
+        wspace = .2,
+        left = .05,
+        right = .98,
+        top = .95,
+        bottom = .075,
+    )
+    if fname is False:
+        plt.show()
+    else:
+        plt.savefig(fname)
+        plt.close()
     
 
 
@@ -434,7 +503,7 @@ def load_run_kr(runs, config = False, mconfig = None, gs = False, W = 13.5, retu
                     else:
                         out = np.append(out, sp_)
                 except Exception as e:
-                    print("\33[31mERROR: {e}\33[0m")
+                    print(f" \33[31mERROR: {e}\33[0m")
             sp = out
         if gs is not False:
             print("calculating energy")
