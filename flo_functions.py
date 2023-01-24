@@ -294,3 +294,26 @@ expgauss = fit_function(
     formula = "A exp(t / tau) + B exp(-(t-mu)^2 /(2 sigma)^2) + C",
     formula_tex = "$A \\cdot \\exp{{( t / \\tau)}} + B \\exp{{\\frac{{-(t-\\mu)^2}}{{(2 \\sigma)^2}}}} + C$",
 )
+
+
+# exponential decay with turn on
+def f_decay_to(t, t_0, tau, a, A):
+    return(A * 1/(1+np.exp((t_0-t)/a)) * np.exp((t_0-t)/tau))
+
+def f_p0_decay_to(x, y, tau_lit = 150, a_lit = 10):
+    return([
+        x[np.argmax(y)],
+        tau_lit,
+        a_lit,
+        max(y)
+    ])
+expdecay_to = fit_function(
+    f = f_decay_to,
+    f_p0 = f_p0_decay_to,
+    description = "exponential decay including turn on fucntion",
+    short_description = "exp decay * turnon",
+    parameters = ["t0", "tau", "a", "A"],
+    parameters_tex = ["t_0", "\\tau", "a", "A"],
+    formula = "A/(1+ exp((t_0 - t)/a)) np.exp((t_0-t)/tau)",
+    formula_tex = "$\\frac{{A exp((t_0-t)/\\tau)}}{{(1 + \\exp((t_0 - t)/a))}} $",
+)

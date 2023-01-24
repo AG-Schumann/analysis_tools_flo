@@ -2,10 +2,15 @@ import sys
 import os
 from datetime import datetime
 from flo_analysis import *
+import flo_fancy
+
 import flo_decorators
 from threading import Thread, Event
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 
+def now():
+    return(datetime.now())
 
 # import 
 sys.path.insert(0,"/data/workspace/Flo/straxbra_flo/strax")
@@ -31,6 +36,271 @@ context_dp = straxbra.XebraContext()
 db = straxbra.utils.db
 
 
+labels = {
+    "event_fits": np.array(["first S1", "second S1", "first S2", "second S2"]),
+    "event_fits_summary": np.array(["first S1", "second S1", "first S2", "second S2", "unsplit S1", "unsplit S2", "total S1", "total S2", "afterpulse"]),
+    "sp_krypton_summary": np.array(['first S1', 'second S1', 'first S2', 'second S2', 'unsplit S1', 'unsplit S2', 'total S1', 'total S2']),
+    
+}
+
+def draw_woa_multi(
+    ds, draw = "0123", plugin = "event_fits_summary", add_grid = True, show_only_max_count = True,
+    vmin = 2, global_scale = False, show_counts = True, title = "", show_precut = False,
+    labels_ = False, field_a  = "areas", field_w  = "widths", ax = False , cmaps = False, cmap_cb = False):
+    '''
+    draws multiple signals in one width over area plot
+    each signal get a different color
+    
+    params:
+    ds: the dataset that contains the fields "areas" and "widths"
+    draw: the field indize to draw. must be iteratble (string  or list)
+        default: "0123"
+    plugin: used to get labels via labels[plugin]
+        default: event_fits_summary
+    add_grid: adds a grid to the plot if set to True
+        default: True
+    show_only_max_count: If True draws only the max count per bin.
+        prevents lower values overwriting higher values
+        default True
+    vmin: bins with less counts are set to 0
+        default 2
+    global_scale: wheter the colorbars should have the same vmax or not
+        default True
+    show_counts: wheter the legend shoudl also contain the number of binned datapoints
+        default True
+    labels_: alternative to plugin, must be a list
+        default: False
+    field_a, field_w: fields that contain area/width
+        default: "areas", "widths"
+    ax: where to put the plot into
+        default: False, creates a new one
+    cmaps: the colormaps to use, if cmaps run out fall back to cmap_cb
+        default False uses ['Purples', 'Blues', 'Greens', 'Reds', 'Oranges']
+    cmap_cb: the colormap for the colorbar
+        default False uses "Greys"
+    
+    
+    '''
+    
+    if (vmin is False) or (vmin < 1):
+        vmin = 1
+    
+    if labels_ is False:
+        labels_ = labels[plugin]
+    
+    draw = [int(i) for i in draw]
+    n_draw = len(draw)
+
+    counts = [False]*n_draw
+    labs = [""]*n_draw
+    for i, j in enumerate(draw):
+        try:
+            
+            count, bca, bcw = fhist.make_2d_hist_plot(ds[field_a][:, j], ds[field_w][:, j])
+            
+            n_precut = np.nansum(count, dtype = int)            
+            
+            count[count < vmin] = 0
+            n_postcut = np.nansum(count, dtype = int)
+            counts[i] = count
+            
+            labs[i] = labels_[j]
+            if show_counts is True:
+                if show_precut is True:
+                    str_appendix = f" (N: {n_postcut}/{n_precut})"
+                else:
+                    str_appendix = f" (N: {n_postcut})"
+                labs[i] = f"{labs[i]}{str_appendix}"
+            
+        except Exception as e:
+            print(f"failed at {i} (label: {labs[i]}): {e}")
+    
+    
+    if ax is False:
+        ax = fhist.ax()
+    
+    if title != "":
+        ax.set_title(title)
+    vmax = np.nanmax(counts)
+    
+    if vmax == 0:
+        raise ValueError("maxmimum of counts is zero!")
+    
+
+    if cmaps is False:
+        cmaps = [
+            'Purples',
+            'Blues',
+            'Greens',
+            'Reds',
+            'Oranges'
+        ]
+    if cmap_cb is False:
+        cmap_cb = "Greys"
+    
+    if global_scale is True:
+        im = ax.pcolormesh(
+            bca, bcw, np.zeros_like(count.T),
+            norm=fhist.LogNorm(),
+            cmap = cmap_cb, vmin=vmin, vmax=vmax
+        )
+        cb = plt.colorbar(im, ax=ax, label="Counts/bin",)
+        lims = dict(
+            vmin = vmin,
+            vmax = vmax,
+        )
+    else:
+        lims = dict(
+            vmin = vmin,
+        )
+    
+    max_values = np.nanmax(np.array(counts), axis=0)
+    
+    for count, label in zip(counts, labs):
+        
+        if (count is not False) and (label != ""):
+            if len(cmaps) > 0:
+                cmap = cmaps.pop(0)
+            else:
+                cmap = cmap_cb
+            ax.plot(
+                [],
+                "o",
+                color = mpl.cm.get_cmap(cmap)(.75),
+                label = label
+            )
+            
+            if show_only_max_count is True:
+                count_ = count * (count >= max_values)
+            else:
+                count_ = count
+            
+            
+            im_ = ax.pcolormesh(
+                bca, bcw,
+                count_.T,
+                norm=fhist.LogNorm(),
+                cmap = cmap,
+                **lims
+            )
+
+
+
+
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_xlabel(fhist.defaults["2d_hist_label_area"])
+    ax.set_ylabel(fhist.defaults["2d_hist_label_width"])
+
+    ax.legend(loc = "upper right")
+    if add_grid is True:
+        ax.grid()
+    return(counts, bca, bcw)
+
+
+
+
+
+def draw_woa(ds, plugin = "event_fits_summary", draw = "all", title = "", ret = False, loc = "upper right", **kwargs):
+    '''
+        draws each individual signals if available
+    '''
+    
+    titles = labels[plugin]
+    
+    if draw == "all":
+        draw = np.array(list(range(len(titles))))
+    else:
+        draw = np.array([int(i) for i in draw])
+    fig, axs = fhist.make_fig(n_tot = -len(draw), axis_off = True)
+    
+    if title != "":
+        fig.suptitle(title)
+    
+    for i, ax, title in zip(draw, axs, titles[draw]):
+        ax.set_title(title)
+        ax.set_axis_on()
+        try:
+            fhist.make_2d_hist_plot(ds["areas"][:,i],ds["widths"][:,i], ax, loc = loc, **kwargs)
+            ax.grid()
+        except Exception:
+            pass
+    plt.subplots_adjust(
+        hspace = .25
+    )
+    plt.show()
+    if ret is True:
+        return(fig, axs)
+
+
+
+
+def rs(runs):
+    '''
+    turns runs into a list of run strings
+    '''
+    
+    if isinstance(runs, int):
+        runs = [runs]
+    elif isinstance(runs, str):
+        runs = [runs]
+
+    
+    rstrs = [f"{r:0>5}" for r in runs]
+    
+    return(rstrs)
+
+
+def check(runs, target, context = False, config = False, cast_int = True, v = True):
+    
+    if context is False:
+        context = context_sp
+    if config is False:
+        if target[:10] == "sp_krypton":
+            config = default_config
+        else:
+            config = {}
+        
+    runs = rs(runs)
+    
+    t0 = now()
+    if v is True: print(f"checking data availability of \33[1m{target}\33[0m for {len(runs)} runs...")
+    runs = [r for r in runs if context.is_stored(r, target, config = config)]
+    t1 = now()
+    if cast_int is True:
+        runs = list(map(int, runs))
+    if v is True: print(f"found data for {len(runs)} runs in {t1-t0}")
+    return(runs)
+
+
+
+def load(runs, target, context = False, config = False, check_load = True, v = True, **kwargs):
+    if context is False:
+        context = context_sp
+    if config is False:
+        if target[:10] == "sp_krypton":
+            config = default_config
+        else:
+            config = {}
+    
+    runs = rs(runs)
+    if check_load is not False:
+        runs = check(runs = runs, target = target, context = context, config = config, v = v)
+        
+        
+    if len(runs) == 0:
+        if v is True: print("no runs to load")
+        return None
+        
+    t0 = now()
+    if v is True: print(f"loading data of {len(runs)} runs...")
+    
+    runs = rs(runs)
+    data =  context.get_array(runs, target, config = config, **kwargs)
+    t1 = now()
+    if v is True: print(f"data loaded: {len(runs)} entries in {t1-t0}")
+    return(data)
+
 c = {
     "s":context_sp,
     "d":context_dp,
@@ -50,7 +320,71 @@ energies_signals = {
     ("second", "2", 32.2),
 }
 
+def append_unique(df, fields, sep="__", uname = "unique"):
+    '''
+    modifies df directly!!
+    '''
+    out = False
+    for f in fields:
+        if out is False:
+            out = df[f].astype(str)
+        else:
+            out = out + sep + df[f].astype(str)
+    df[uname] = out
 
+
+
+def make_unique_runs_dict(runs_all, fields):
+    '''
+    flattens the given array and merges multiple fields properties
+    returns a dict where each unique fields combination contains all runs 
+        with this combination
+    '''
+    df = make_dV_df(runs_all)
+    append_unique(df, fields)
+    
+    uniques = {u:df.loc[df["unique"] == u]["run"].values for u in np.unique(df["unique"])}
+    
+    return(uniques)
+
+
+
+def make_dV_dict(runs_all):
+    _Vs = np.unique([x["fields"]["dV_Anode"] for x in runs_all.values()])
+    runs_all_dVs = {dV:[r for r, x in runs_all.items() if x["fields"]["dV_Anode"] == dV] for dV in _Vs}
+    return(runs_all_dVs)
+
+
+def make_dV_df(runs_all):
+    df = pd.DataFrame()
+    for r, d in runs_all.items():
+        d = {"run": r, **flatten_dict(d)}
+        df = df.append(d, ignore_index=True)
+    return(df)
+
+
+def get_all_runs(query = False):
+    '''
+    runs_all, runs_all_dVs = mystrax.get_all_runs()
+    
+    parameter:
+        - query: database query
+    
+    '''
+    if query is False:
+        query = {}
+    db = list(mycol.find(query))
+    
+    runs_all = {db_i["run"]:db_i for db_i in db}
+
+
+    runs_all_dVs  = make_dV_dict(runs_all)
+    
+    return(runs_all, runs_all_dVs)
+    
+    
+    
+    
 # description for sp_krypton exits
 DEVELOPER_fails={
     0: "no peaks in event",
@@ -110,11 +444,25 @@ def filter_peaks(peaks, sp_krypton_s1_area_min = 25, sp_krypton_max_drifttime_ns
     idx = np.unique(np.append(idx, idx+1))
     return(ps[idx])
 
-def draw_peak(ax, p, t0 = False, label="", show_area = False, label_peaktime = False, show_peaktime = False, **kwargs):
+
+def draw_peaks(ax, ps, t0 = False, y_offset = 0, *args, **kwargs):
+    if t0 is False:
+        t0 = ps[0]["time"]
+    elif t0 == "start":
+        t0 = False
+    for pi, p in enumerate(ps):
+        draw_peak(ax, p, t0 = t0, y_offset = y_offset*pi, *args, **kwargs)
+
+def draw_peak(ax, p, t0 = False, label="", show_area = False, label_peaktime = False, show_peaktime = False, 
+    PE_ns = True, y_offset = 0, **kwargs):
     if t0 is False:
         t0 = p["time"]
     t_offs = p["time"]-t0
     y = np.trim_zeros(p["data"], trim = "b")
+    if PE_ns is True:
+        y = y / p["dt"]
+    y = y + y_offset
+    
     x = t_offs+np.arange(0, len(y))*p["dt"]
     props = []
     if show_area is True:
@@ -164,7 +512,13 @@ def draw_gauss_peak(ax, p, t0 = False, show_pars = True, **kwargs):
     
 
 
-def draw_kr_event(ax, event, show_peaks = "0123", label_area = True, show_peaktime = False, label_peaktime = False, leg_loc = False, t_ref = 0, t0 = False, **kwargs):
+def draw_kr_event(
+    ax, event,
+    show_peaks = "0123", label_area = True,
+    show_peaktime = False, label_peaktime = False,
+    PE_ns = True,
+    leg_loc = False, t_ref = 0, t0 = False,
+    **kwargs):
     '''
     plots S1s and S2s into ax
     
@@ -173,6 +527,7 @@ def draw_kr_event(ax, event, show_peaks = "0123", label_area = True, show_peakti
       (default = "0123") ==> all 4 peaks are shown
     - show_peaktime:
       show midpoint ime of peak
+    - PE_ns (True): convert peaks from PE/sample to PE/ns
     - label_peaktime:
         add midpoint time of peak to legend
     - leg_loc: set this to a valid legend_loc value to draw the legend,
@@ -203,6 +558,8 @@ def draw_kr_event(ax, event, show_peaks = "0123", label_area = True, show_peakti
         if str(peak_i) in show_peaks:
             t_offs = t_peak-t0
             y = np.trim_zeros(p_data, trim = "b")
+            if PE_ns is True:
+                y = y/event["dt"][peak_i]
             x = t_offs+np.arange(0, len(y))*event["dt"][peak_i]
             area = event[f"area_s{(peak_i>1)+1}{peak_i%2+1}"]
             
@@ -220,7 +577,10 @@ def draw_kr_event(ax, event, show_peaks = "0123", label_area = True, show_peakti
             if show_peaktime is True:
                 ax.axvline(event["time_peaks"][peak_i] + t_offset_abs, color = plt_i.get_color())
 
-    ax.set_ylabel("signal / PE/sample")
+    if PE_ns is True:
+        ax.set_ylabel("signal / PE/ns")
+    else:
+        ax.set_ylabel("signal / PE/sample")
     ax.set_xlabel("time / ns")
 
     if leg_loc is not False:
@@ -360,7 +720,14 @@ def get_calibration_data(run):
 def get_peaks_by_timestamp(peaks, timestamps):
     return(peaks[np.in1d(peaks["time"], timestamps)])
 
-def get_krskru(kr):
+def get_peaks_by_event(peaks, event):
+    return(peaks[
+          (peaks["time"] >= event["time"])
+        & (peaks["time"] <= event["endtime"])
+        
+    ])
+
+def get_krskru(kr, bools = True):
     '''
     returns split and unsplit events for easy access
     
@@ -368,10 +735,14 @@ def get_krskru(kr):
     krs, kru = get_krskru(kr)
     
     '''
-    krs = kr[kr["s2_split"]]
-    kru = kr[~kr["s2_split"]]
+    if bools is True:
+        krs = kr[kr["s2_split"]]
+        kru = kr[~kr["s2_split"]]
+    else:
+        krs = kr[bools]
+        kru = kr[~bools]
 
-    return(kr[kr["s2_split"]], kr[~kr["s2_split"]])
+    return(krs, kru)
 
 
 def get_min_peaks(kr, merge = True):
@@ -429,6 +800,7 @@ def load_run_kr(runs, config = False, mconfig = None, gs = False, W = 13.5, retu
     
     if mconfig is None:
         mconfig = {}
+        
     
     
     

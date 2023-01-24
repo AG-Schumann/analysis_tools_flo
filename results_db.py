@@ -8,12 +8,12 @@ import pandas as pd
 
 # define variables
 database_file = "/data/workspace/Flo/library_flo/results_db/results.pkl"
-voltage_file = "/data/workspace/Flo/library_flo/Voltages_lookup.csv"
+voltage_file = "/data/workspace/Flo/library_flo/Voltages_lookup.xls"
 
 
-voltages_LUT = pd.read_csv(voltage_file, sep = ";")
+voltages_LUT = pd.read_excel(voltage_file)
 
-def get_voltages(run, context, voltages_LUT):
+def get_voltages(run, context = "s", voltages_LUT = voltages_LUT):
     result = voltages_LUT.loc[
           (voltages_LUT["run"] == run)
         & (voltages_LUT["context"] == context)

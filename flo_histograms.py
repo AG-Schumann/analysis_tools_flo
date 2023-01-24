@@ -17,6 +17,31 @@ from default_bins import *
 import flo_functions as ff
 
 
+default_folder_out = f"/data/storage/userdata/{os.environ.get('USER')}"
+
+def make_folder(path, msg_on_exist = False):
+    try:
+        os.mkdir(path)
+        print(f"created folder: {path}")
+    except FileExistsError:
+        if msg_on_exist is True:
+            print(f"folder exists already: {path}")
+    return(None)
+
+
+def get_path(folder_name):
+    f'''
+    creates a folder in {default_folder_out}/
+    and returns full path
+    '''
+    path = f"{default_folder_out}/{folder_name}"
+    make_folder(path)
+    return(path)
+
+
+
+
+
 
 
 try:
@@ -40,14 +65,9 @@ label_tau_kr_lit = f"$\\tau = ({tau_kr_lit:.1f} \\pm {stau_kr_lit:.1f})$ ns"
 def now():
     return(datetime.now())
     
-def make_folder(path):
-    try:
-        os.mkdir(path)
-        print(f"created folder: {path}")
-    except FileExistsError:
-        print(f"folder exists already: {path}")
-        
-    return(None)
+
+
+
 
 def fraction_exp(a = 0, b = np.inf, tau = tau_kr_lit):
     '''
@@ -106,6 +126,14 @@ def make_fig(nrows=1, ncols=1, w=6, h=4, rax = True, n_tot = False, axis_off = F
             ncols, nrows = nrows, ncols
     
     fig, axs = plt.subplots(nrows, ncols, *args, **kwargs)
+    plt.subplots_adjust(
+        left = .15,
+        right = .98,
+        top = .90,
+        bottom = .15,
+        hspace = .3,
+        wspace = .3,
+    )
     fig.set_size_inches(ncols*w, nrows*h)
     fig.set_facecolor("white")
     fig.set_dpi(200)
@@ -122,7 +150,9 @@ def make_fig(nrows=1, ncols=1, w=6, h=4, rax = True, n_tot = False, axis_off = F
             
     return(fig, axs)
 
-
+def ax(**kwargs):
+    fig, ax = make_fig(**{"rax": False, **kwargs})
+    return(ax)
 
 def addlabel(ax, label, color = "black", linestyle = "", marker = "", *args, **kwargs):
     ax.plot([], [], label = label, color = color, linestyle=linestyle, marker=marker, *args, **kwargs)
@@ -702,8 +732,6 @@ def get_bin_centers(bins):
 
 
 
-
-
 def get_hist_data(data, s_offset = 0, density= "normalized", **kwargs):
     ''''
     Computes a np.histogram based on 'data', should support all of
@@ -780,6 +808,20 @@ def dp(message = ""):
         print(f"  \33[34m{frame.f_code.co_name}:\33[0m {message}")
 
 
+def add_N(ax, N, label = "", fmt = ".0f"):
+    if isinstance(ax, plt.Axes):
+        if label != "":
+            label = f"$_\\mathrm{{{label}}}$"
+        addlabel(ax, f"N{label}: {N:{fmt}}")
+        
+    
+def add_counts(ax, counts = False, data = False):
+    if isinstance(ax, plt.Axes):
+        if data is not False:
+            add_N(ax, len(data), "total")
+        if counts is not False:
+            add_N(ax, np.sum(counts), "binned")
+        
 
 def make_2d_hist_plot(
         x_data,
@@ -790,6 +832,7 @@ def make_2d_hist_plot(
         aowp = True,
         colorbar_label = "Counts/bin",
         debug = False,
+        loc = False,
         *args, **kwargs
         ):
     '''
@@ -835,26 +878,40 @@ def make_2d_hist_plot(
         bins = (bins_x, bins_y),
     )
     
+    N_total = np.sum(counts)
+    
     bin_centers_x = get_bin_centers(bins_x)
     bin_centers_y = get_bin_centers(bins_y)
     
-    
-    
     if isinstance(ax, plt.Axes):
-        im = ax.pcolormesh(bins_x, bins_y, counts.T, norm=LogNorm(), *args, **kwargs)
-        if colorbar_label is not False:
-            cb = plt.colorbar(im, ax=ax, label=colorbar_label)
-        
-        if aowp:
-            ax.set_xscale('log')
-            ax.set_yscale('log')
+        if N_total > 0:
+            try:
+                im = ax.pcolormesh(bins_x, bins_y, counts.T, norm=LogNorm(), *args, **kwargs)
+                if colorbar_label is not False:
+                    cb = plt.colorbar(im, ax=ax, label=colorbar_label)
+            except Exception:
+                pass
+            
+            if aowp:
+                ax.set_xscale('log')
+                ax.set_yscale('log')
 
-            ax.set_xlabel(defaults["2d_hist_label_area"])
-            ax.set_ylabel(defaults["2d_hist_label_width"])
-        
-        
+                ax.set_xlabel(defaults["2d_hist_label_area"])
+                ax.set_ylabel(defaults["2d_hist_label_width"])
+            if loc is not False:
+                add_counts(ax, counts = counts, data = x_data)
+                try:
+                    ax.legend(loc = loc)
+                except Exception as e :
+                    print(f"\33[31m{e}\33[0m")
+        else:
+            ax.set_axis_off()
     
     return((counts, bin_centers_x, bin_centers_y))
+
+
+
+
 
 def exp_decay(t, A, kappa, C):
     return(A*np.exp(-t*kappa)+C)

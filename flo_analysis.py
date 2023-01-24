@@ -7,7 +7,9 @@ import flo_functions as ff
 import analysis_help as fah
 import matplotlib.pyplot as plt
 import decimal
+from flo_fancy import *
 from default_bins import *
+
 import inspect
 from datetime import datetime
 
@@ -23,14 +25,6 @@ from datetime import datetime
         # 'b': [0.4605871081950396, 0.3783252192920378, 0.16472936074754693],
     # }
 # }
-
-def enumezip(*args):
-    '''
-    generator that can be used when a zip-generator should also yield the index
-    '''
-    for i, argsi in enumerate(zip(*args)):
-        yield(i, *argsi)
-
 
 
 
@@ -836,7 +830,23 @@ the lifetime plus uncertainty (in  µs)
     })
     
     
-def get_kr_lifetime_from_run(kr, field = "time_decay_s1", bins = None, bw = 50, f = ff.exp_decayC, ax = False, rz = False, count_offset = 1, x_offset = 0, cutoff = True, show_p0 = False, units = None, *args, **kwargs):
+def get_kr_lifetime_from_run(
+    kr,
+    field = "time_decay_s1",
+    bins = None,
+    bw = 50,
+    f = ff.exp_decayC,
+    ax = False, 
+    rz = False,
+    count_offset = 1,
+    x_offset = 0,
+    cutoff = True, 
+    show_p0 = False,
+    show_lit = True,
+    show_function = False,
+    units = None,
+    dt_above_zero = True,
+    *args, **kwargs):
     '''
     returns the krypton lifetime of a krypton run
     
@@ -854,10 +864,12 @@ def get_kr_lifetime_from_run(kr, field = "time_decay_s1", bins = None, bw = 50, 
         cutoff (True): remove empty bins after the last non zero bins
         show_p0 (False): wheter the starting parameters should be shown
         units: what units to use in the plots (only relevant if f is a different function)
+        dt_above_zero (True): whether values below or equal to zero should be removed
     '''
     
     if units is None:
-        units = ["", "ns", ""]
+        units = [""]*len(f)
+        units[1] = "ns"
     
     if bins is None:
         bins = np.arange(-bw/2, 3500+bw/2*3, bw)
@@ -867,8 +879,12 @@ def get_kr_lifetime_from_run(kr, field = "time_decay_s1", bins = None, bw = 50, 
         # print(f"set count_offset to {count_offset} as zero counts are not being fully removed")
         
     
+    data = kr[field]
+    if dt_above_zero is True:
+        _, data = fhist.remove_zero(data > 0, data)
+        
     
-    c_, bins = np.histogram(kr[field], bins = bins)
+    c_, bins = np.histogram(data, bins = bins)
     sc_ = (c_+count_offset)**.5
     bc_ = fhist.get_bin_centers(bins)
 
@@ -887,9 +903,11 @@ def get_kr_lifetime_from_run(kr, field = "time_decay_s1", bins = None, bw = 50, 
     else:
         show_p0 = False
 
-    i0 = np.argmax(c)+x_offset
-    x, y, sy = bc[i0:], c[i0:], sc[i0:]
-    
+    if x_offset is not False:
+        i0 = np.argmax(c)+x_offset
+        x, y, sy = bc[i0:], c[i0:], sc[i0:]
+    else:
+        x, y, sy = bc, c, sc
     
     tau_lit = fhist.tau_kr_lit
     stau_lit= fhist.stau_kr_lit
@@ -926,10 +944,10 @@ def get_kr_lifetime_from_run(kr, field = "time_decay_s1", bins = None, bw = 50, 
     
         if isinstance(ax, plt.Axes):
             ax.plot(xp, yf, label = f"fit: {chi2[-1]}")
-            fhist.addlabel(ax, f)        
-            for tex, v, sv, u in zip(f, fit, sfit, units):
-                fhist.add_fit_parameter(ax, tex, v, sv, u = u)
-    
+            if show_function is True:
+                fhist.addlabel(ax, f)
+            fhist.add_fit_parameters(ax, f, fit, sfit, units)
+            
     except Exception as e :
         if isinstance(ax, plt.Axes):
             fhist.addlabel(ax, "fit: failed")
@@ -937,8 +955,8 @@ def get_kr_lifetime_from_run(kr, field = "time_decay_s1", bins = None, bw = 50, 
             
         print(f"\33[31mfit failed: \33[0m{e}")
         
-    
-    fhist.add_fit_parameter(ax, "\\tau_\mathrm{lit}", tau_lit, stau_lit, u = "ns")
+    if show_lit is True:
+        fhist.add_fit_parameter(ax, "\\tau_\mathrm{lit}", tau_lit, stau_lit, u = "ns")
     ax.legend(loc = "upper right")
         
     return((fit[1], sfit[1]), {"fit":fit, "sfit":sfit, "cov": cov, "chi2": chi2})
