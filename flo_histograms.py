@@ -41,6 +41,17 @@ def get_path(folder_name):
 
 
 
+def range(x, thr = 0):
+    x_ = np.array(x)
+    if thr is not False:
+        x_ = x_[x_ > thr]
+    else: 
+        x_ = x_
+    min_ = np.nanmin(x_)
+    max_ = np.nanmax(x_)
+    diff = max_ - min_
+    
+    return(min_, max_, diff)
 
 
 
@@ -64,7 +75,9 @@ label_tau_kr_lit = f"$\\tau = ({tau_kr_lit:.1f} \\pm {stau_kr_lit:.1f})$ ns"
 
 def now():
     return(datetime.now())
-    
+
+def snow(fmt = "%H:%M:%S"):
+    return(now().strftime(fmt))
 
 
 

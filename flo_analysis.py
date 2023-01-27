@@ -872,7 +872,7 @@ def get_kr_lifetime_from_run(
         units[1] = "ns"
     
     if bins is None:
-        bins = np.arange(-bw/2, 3500+bw/2*3, bw)
+        bins = fhist.make_bins(0, 1500, bw)
     
     if ((rz is not True) or (cutoff is True)) and count_offset < 1:
         count_offset = 1

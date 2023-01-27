@@ -44,9 +44,9 @@ labels = {
 }
 
 def draw_woa_multi(
-    ds, draw = "0123", plugin = "event_fits_summary", add_grid = True, show_only_max_count = True,
-    vmin = 2, global_scale = False, show_counts = True, title = "", show_precut = False,
-    labels_ = False, field_a  = "areas", field_w  = "widths", ax = False , cmaps = False, cmap_cb = False):
+    ds, ax = False, draw = "0123", plugin = "event_fits_summary", add_grid = True, show_only_max_count = True,
+    vmin = 1, global_scale = False, show_counts = True, title = "", show_precut = False,
+    labels_ = False, field_a  = "areas", field_w  = "widths", cmaps = False, cmap_cb = False):
     '''
     draws multiple signals in one width over area plot
     each signal get a different color
@@ -109,7 +109,7 @@ def draw_woa_multi(
                 if show_precut is True:
                     str_appendix = f" (N: {n_postcut}/{n_precut})"
                 else:
-                    str_appendix = f" (N: {n_postcut})"
+                    str_appendix = f" (N: {n_precut})"
                 labs[i] = f"{labs[i]}{str_appendix}"
             
         except Exception as e:
@@ -264,17 +264,42 @@ def check(runs, target, context = False, config = False, cast_int = True, v = Tr
     runs = rs(runs)
     
     t0 = now()
-    if v is True: print(f"checking data availability of \33[1m{target}\33[0m for {len(runs)} runs...")
+    if v is True: print(f"checking \33[1m\33[34m{target}\33[0m for {len(runs)} runs...")
     runs = [r for r in runs if context.is_stored(r, target, config = config)]
     t1 = now()
     if cast_int is True:
         runs = list(map(int, runs))
-    if v is True: print(f"found data for {len(runs)} runs in {t1-t0}")
+    if v is True: print(f"    found data for {len(runs)} runs in {t1-t0}")
     return(runs)
 
 
 
 def load(runs, target, context = False, config = False, check_load = True, v = True, **kwargs):
+    '''
+    loads data if availabe
+    
+    parameters:
+        runs: list of runs to load
+            (either list or one value; either string or int; doestn't matter)
+        target: the plugin to load
+        context: which context to use (mystrax.context_sp or mystrax.context_dp)
+            default False falls back to mystrax.context_sp
+        config: custom config to be loaded
+            default False
+            if False uses default configs:
+                - mystrax.default_config for runs that start with sp_krypton
+                - {} for everythin else
+        check load: check if the data is available before attmepting to load it
+            use a string of a different target to check the existance of that data to load this data
+            set to false if you want to skip all checks
+            default True
+        v: verbose toggle, prints messages
+            default True
+            
+    check_load
+    
+    '''
+    
     if context is False:
         context = context_sp
     if config is False:
@@ -285,7 +310,11 @@ def load(runs, target, context = False, config = False, check_load = True, v = T
     
     runs = rs(runs)
     if check_load is not False:
-        runs = check(runs = runs, target = target, context = context, config = config, v = v)
+        if isinstance(check_load, str):
+            target_ = check_load
+        else:
+            target_ = target        
+        runs = check(runs = runs, target = target_, context = context, config = config, v = v)
         
         
     if len(runs) == 0:
@@ -293,12 +322,12 @@ def load(runs, target, context = False, config = False, check_load = True, v = T
         return None
         
     t0 = now()
-    if v is True: print(f"loading data of {len(runs)} runs...")
+    if v is True: print(f"loading \33[1m\33[34m{target}\33[0m of {len(runs)} runs...")
     
     runs = rs(runs)
     data =  context.get_array(runs, target, config = config, **kwargs)
     t1 = now()
-    if v is True: print(f"data loaded: {len(runs)} entries in {t1-t0}")
+    if v is True: print(f"    data loaded: {len(runs)} entries in {t1-t0}")
     return(data)
 
 c = {
@@ -360,6 +389,12 @@ def make_dV_df(runs_all):
     for r, d in runs_all.items():
         d = {"run": r, **flatten_dict(d)}
         df = df.append(d, ignore_index=True)
+        
+    df = df.astype({
+        'run': 'int32',
+        'N': 'int32',
+        'fields.adc': 'int32',
+    })
     return(df)
 
 
