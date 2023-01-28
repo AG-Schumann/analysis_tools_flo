@@ -832,12 +832,13 @@ the lifetime plus uncertainty (in  µs)
     
 def get_kr_lifetime_from_run(
     kr,
-    field = "time_decay_s1",
+    field = True,
     bins = None,
     bw = 50,
     f = ff.exp_decayC,
+    t_lims = (False, False),
     ax = False, 
-    rz = False,
+    rz = True,
     count_offset = 1,
     x_offset = 0,
     cutoff = True, 
@@ -846,6 +847,7 @@ def get_kr_lifetime_from_run(
     show_function = False,
     units = None,
     dt_above_zero = True,
+    
     *args, **kwargs):
     '''
     returns the krypton lifetime of a krypton run
@@ -853,10 +855,11 @@ def get_kr_lifetime_from_run(
     
     parameters:
         kr: the dataset to check
-        field ('time_decay_s1'): which field to use
+        field (True: 'time_decay_s1'): which field to use, if True: auto
         bins: which binning to use. by default: -5 to 3500 in steps of 10
         bw (50): bin width used fdor binning if bins aare not provided
         f (ff.exp.decay): the fit_function (see flo_functions) to use
+        t_lims (False, False):  limits (inclusive) for bin ranges
         ax (False): if this an axis element the fit will be plotted into here
         rz (False): wheter or note empty bins shoudl be removed
         count_offset (1): how many counts shoudl be added when calculating the uncertrainty (sqrt(n + count_offset))
@@ -867,12 +870,21 @@ def get_kr_lifetime_from_run(
         dt_above_zero (True): whether values below or equal to zero should be removed
     '''
     
+    
+    if field is True:
+        names_check = ["decaytime", "time_decay", "time_decay_s1"]
+        names = kr.dtype.names
+        # why raise an error myself if pythgon does it 
+        field = [f for f in names_check if f in names][0]
+    
+    
     if units is None:
         units = [""]*len(f)
         units[1] = "ns"
     
     if bins is None:
         bins = fhist.make_bins(0, 1500, bw)
+    
     
     if ((rz is not True) or (cutoff is True)) and count_offset < 1:
         count_offset = 1
@@ -887,6 +899,10 @@ def get_kr_lifetime_from_run(
     c_, bins = np.histogram(data, bins = bins)
     sc_ = (c_+count_offset)**.5
     bc_ = fhist.get_bin_centers(bins)
+    
+    
+    
+
 
     if rz is True:
         c, sc, bc = fhist.remove_zero(c_, sc_, bc_)
@@ -903,6 +919,14 @@ def get_kr_lifetime_from_run(
     else:
         show_p0 = False
 
+
+    if t_lims[0] is not False:
+        i0 = np.nonzero(bc >= t_lims[0])[0]
+        bc, c, sc = bc[i0], c[i0], sc[i0]
+    if t_lims[1] is not False:
+        i0 = np.nonzero(bc <= t_lims[1])[0]
+        bc, c, sc = bc[i0], c[i0], sc[i0]
+        
     if x_offset is not False:
         i0 = np.argmax(c)+x_offset
         x, y, sy = bc[i0:], c[i0:], sc[i0:]
@@ -921,7 +945,7 @@ def get_kr_lifetime_from_run(
     cov = np.eye(len(f))
     chi2 = [0,0,0,"fit failed", "fit failed"]
     
-    if show_p0 is True:
+    if isinstance(ax, plt.Axes) and (show_p0 is True):
         ax.plot(xp, y0, label = f"starting parameters")
         for tex, v, u in zip(f, p0, units):
             fhist.add_fit_parameter(ax, tex, v, u = u)
@@ -955,9 +979,10 @@ def get_kr_lifetime_from_run(
             
         print(f"\33[31mfit failed: \33[0m{e}")
         
-    if show_lit is True:
-        fhist.add_fit_parameter(ax, "\\tau_\mathrm{lit}", tau_lit, stau_lit, u = "ns")
-    ax.legend(loc = "upper right")
+    if isinstance(ax, plt.Axes):
+        if show_lit is True:
+            fhist.add_fit_parameter(ax, "\\tau_\mathrm{lit}", tau_lit, stau_lit, u = "ns")
+        ax.legend(loc = "upper right")
         
     return((fit[1], sfit[1]), {"fit":fit, "sfit":sfit, "cov": cov, "chi2": chi2})
     

@@ -251,15 +251,20 @@ def rs(runs):
     return(rstrs)
 
 
+def find_config(target = ""):
+    if target[:10] == "sp_krypton":
+        config = default_config
+    else:
+        config = {}
+    return(config)
+
+
 def check(runs, target, context = False, config = False, cast_int = True, v = True):
     
     if context is False:
         context = context_sp
     if config is False:
-        if target[:10] == "sp_krypton":
-            config = default_config
-        else:
-            config = {}
+        config = find_config(target)
         
     runs = rs(runs)
     
@@ -303,10 +308,7 @@ def load(runs, target, context = False, config = False, check_load = True, v = T
     if context is False:
         context = context_sp
     if config is False:
-        if target[:10] == "sp_krypton":
-            config = default_config
-        else:
-            config = {}
+        config = find_config(target)
     
     runs = rs(runs)
     if check_load is not False:
@@ -990,3 +992,104 @@ def make_todo(kr):
     
 
     return(kru, krs, todo)
+    
+    
+    
+    
+    
+    
+    
+    
+# processing data per run one plugin at a time is much faster and
+#   more reiliable than loading all at once
+
+def get_linage(target):
+    return(
+        context_sp.lineage(
+            run_id = 0,
+            data_type = target
+        )
+    )
+
+def get_load_order(target):
+    linage = get_linage(target)
+    linage2 = {tar:len(get_linage(tar))-1 for tar in linage}
+    
+    target_order = [[]] * (max(linage2.values())+1)
+    for n,c in linage2.items():
+        target_order[c] = (*target_order[c], n)
+
+    target_order.reverse()
+    target_order = [t for to in target_order for t in to]
+
+    return(target_order)
+    
+def get_linage_todo(
+    run,
+    target,
+    config = False,
+    context = False,
+    verbose = True,
+):
+    if context is False:
+        context = context_sp
+        if verbose: print("\33[33mcontext\33[0m: default to context_sp")
+    if config is False:
+        config = find_config(target)
+        if verbose: print(f"\33[33mconfig\33[0m: {config}")
+    load_order = get_load_order(target)
+    
+    todo = []
+    load_order = get_load_order(target)
+    config = find_config(target)
+    for i_load, load in enumerate(load_order):
+        check = context.is_stored(
+            run_id = f"{run:0>5}",
+            target = load,
+            config = config,
+        )
+        if verbose: print(f"* \33[34m{load}\33[0m: {check}")
+        if check is True:
+            break
+        todo.insert(0, load)
+    return(todo)
+    
+    
+def process_linage(
+    run,
+    target,
+    context = False,
+    config = False,
+    todo = False,
+    process = True,
+    verbose = True,
+    
+):
+    if context is False:
+        context = context_sp
+        if verbose: print("\33[33mcontext\33[0m: default to context_sp")
+    if config is False:
+        config = find_config(target)
+        if verbose: print(f"\33[33mconfig\33[0m: {config}")
+    if todo is False:
+        todo = get_linage_todo(
+            run = run,
+            target = target,
+            config = config,
+            context = context,
+            verbose = verbose,
+        )
+            
+    for target_todo in todo:
+        if process is True:
+            _ = load(
+                run, target_todo,
+                config = config,
+                context = context,
+                v = False, 
+                check_load = False
+            )
+        else:
+            if verbose: print(f"\33[34m{target_todo}\33[0m not being loaded")
+    return(None)
+
