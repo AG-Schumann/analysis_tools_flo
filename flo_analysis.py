@@ -28,6 +28,10 @@ from datetime import datetime
 
 
 
+
+def qp(*args, sep = ", ", end = "", flush = True):
+    print(sep.join(map(str, args)), end = end, flush = flush)
+
     
 def np_array_all(*args):
     out = [-1] * len(args)
@@ -835,7 +839,7 @@ def get_kr_lifetime_from_run(
     field = True,
     bins = None,
     bw = 50,
-    f = ff.exp_decayC,
+    f = ff.exp_decay,
     t_lims = (False, False),
     ax = False, 
     rz = True,
@@ -843,11 +847,13 @@ def get_kr_lifetime_from_run(
     x_offset = 0,
     cutoff = True, 
     show_p0 = False,
-    show_lit = True,
+    show_lit = False,
     show_function = False,
     units = None,
     dt_above_zero = True,
-    
+    label = "Data",
+    draw_info = True,
+    draw_fit = True,
     *args, **kwargs):
     '''
     returns the krypton lifetime of a krypton run
@@ -872,7 +878,7 @@ def get_kr_lifetime_from_run(
     
     
     if field is True:
-        names_check = ["decaytime", "time_decay", "time_decay_s1"]
+        names_check = ["decaytime", "time_decay", "time_decay_s1", "decaytime_S1", "decaytime_S2"]
         names = kr.dtype.names
         # why raise an error myself if pythgon does it 
         field = [f for f in names_check if f in names][0]
@@ -914,7 +920,7 @@ def get_kr_lifetime_from_run(
     if isinstance(ax, plt.Axes):
         ax.set_xlabel("decay time / ns")
         ax.set_ylabel("counts")
-        color = ax.plot(bc, c, ".", label = f"Data (N = {np.sum(c, dtype = int)})")[0].get_color()
+        color = ax.plot(bc, c, ".", label = f"{label} (N: {np.sum(c):,.0f})")[0].get_color()
         fhist.errorbar(ax,  bc, c, sc, color = color)
     else:
         show_p0 = False
@@ -967,19 +973,21 @@ def get_kr_lifetime_from_run(
 
     
         if isinstance(ax, plt.Axes):
-            ax.plot(xp, yf, label = f"fit: {chi2[-1]}")
+            if draw_fit is True:
+                ax.plot(xp, yf, label = f"fit: {chi2[-1]}", color = color)
             if show_function is True:
                 fhist.addlabel(ax, f)
-            fhist.add_fit_parameters(ax, f, fit, sfit, units)
+            if (draw_info is True):
+                fhist.add_fit_parameters(ax, f, fit, sfit, units)
             
     except Exception as e :
-        if isinstance(ax, plt.Axes):
+        if isinstance(ax, plt.Axes) and (draw_info is True):
             fhist.addlabel(ax, "fit: failed")
             fhist.addlabel(ax, f)
             
         print(f"\33[31mfit failed: \33[0m{e}")
         
-    if isinstance(ax, plt.Axes):
+    if isinstance(ax, plt.Axes) and (draw_info is True):
         if show_lit is True:
             fhist.add_fit_parameter(ax, "\\tau_\mathrm{lit}", tau_lit, stau_lit, u = "ns")
         ax.legend(loc = "upper right")

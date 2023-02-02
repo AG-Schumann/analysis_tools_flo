@@ -274,7 +274,17 @@ def add_fit_parameters(ax, pars, fit, sfit, units = False, **kwargs):
 
 
 
-def median_gauss(values, bins_median = "auto", f = ff.gauss, ax = False, show_p0 = False, return_chi2 = False, return_all = False, *args, **kwargs):
+def median_gauss(
+    values,
+    bins_median = "auto",
+    f = ff.gauss,
+    ax = False,
+    show_p0 = False,
+    show_bw = False,
+    return_chi2 = False,
+    return_all = False,
+    *args, **kwargs
+):
     '''
 returns mu, sigma, s_mu and the chi2-tuple (in that order) of an arbitrary distribution by a gaus fit
     if the fit crashes returns 4 x nan
@@ -334,12 +344,16 @@ parameters:
             label = f"data (N = {np.sum(counts):.0f}; input: {len(values)})",
             plot = True,
         )
+        if show_bw is True:
+            str_bw = (", ").join(np.unique([f"{bwi:.3g}" for bwi in bw]))
+            addlabel(ax, f"bin width: {str_bw}")
+
         if show_p0 is True:
             y0 = f(xf, *p0)
             ax.plot(xf, y0, label = "p0")
             for p, v in zip(f, p0):
                 add_fit_parameter(ax, p, v)
-    
+        
     
     ret_all = {
         "values": values,
@@ -821,7 +835,7 @@ def dp(message = ""):
         print(f"  \33[34m{frame.f_code.co_name}:\33[0m {message}")
 
 
-def add_N(ax, N, label = "", fmt = ".0f"):
+def add_N(ax, N, label = "", fmt = ",.0f"):
     if isinstance(ax, plt.Axes):
         if label != "":
             label = f"$_\\mathrm{{{label}}}$"

@@ -30,7 +30,7 @@ print(f"straxbra file:           {straxbra.__file__}")
 print(f"EventFits version:       {straxbra.plugins.EventFits.__version__}")
 
 
-
+eff = straxbra.plugins.eff
 context_sp = straxbra.SinglePhaseContext()
 context_dp = straxbra.XebraContext()
 db = straxbra.utils.db
@@ -38,15 +38,51 @@ db = straxbra.utils.db
 
 labels = {
     "event_fits": np.array(["first S1", "second S1", "first S2", "second S2"]),
-    "event_fits_summary": np.array(["first S1", "second S1", "first S2", "second S2", "unsplit S1", "unsplit S2", "total S1", "total S2", "afterpulse"]),
+    "event_fits_summary": np.array(["first S1", "second S1", "first S2", "second S2", "total S1", "total S2"]),
     "sp_krypton_summary": np.array(['first S1', 'second S1', 'first S2', 'second S2', 'unsplit S1', 'unsplit S2', 'total S1', 'total S2']),
     
 }
 
+
+
+
+def get_field(ds, field, prio_identical = True):
+    '''
+    returns the field of ds that start with field
+    '''
+    lf = len(field)
+    
+    if (field in ds.dtype.names) and (prio_identical is True):
+        return(field)
+    
+    fields = [n for n in ds.dtype.names if n[:lf]==field]
+    if len(fields) == 1:
+        return(fields[0])
+    else:
+        return(fields)
+
+
+def s1_ratios(ds):
+    field = get_field(ds, "areas")
+    ratios = ds[field][:,0]/ds[field][:,1]
+    return(ratios)
+
+def draw_multi_woa_multi(ds, axs, draw_list=False, plugin = "event_fits_summary", titles = False, **kwargs):
+    '''
+    wrapper fucntion to draw all three default woa multis of ds into axs
+    '''
+    if draw_list is False:
+        draw_list = ["0123", "45", "67"]
+        if titles is False:
+            titles = ["", "", ""]
+        
+    for ax, draw, title in zip(axs, draw_list, titles):
+        draw_woa_multi(ds, ax = ax, draw = draw, plugin = plugin, title = title, **kwargs)
+
 def draw_woa_multi(
     ds, ax = False, draw = "0123", plugin = "event_fits_summary", add_grid = True, show_only_max_count = True,
     vmin = 1, global_scale = False, show_counts = True, title = "", show_precut = False,
-    labels_ = False, field_a  = "areas", field_w  = "widths", cmaps = False, cmap_cb = False):
+    labels_ = False, field_a  = "auto", field_w  = "auto", cmaps = False, cmap_cb = False):
     '''
     draws multiple signals in one width over area plot
     each signal get a different color
@@ -82,13 +118,20 @@ def draw_woa_multi(
     
     '''
     
+    if field_a  == "auto":
+        field_a = get_field(ds, "areas")
+        
+    if field_w  == "auto":
+        field_w  = get_field(ds, "widths")
+    
+    
     if (vmin is False) or (vmin < 1):
         vmin = 1
     
     if labels_ is False:
         labels_ = labels[plugin]
     
-    draw = [int(i) for i in draw]
+    draw = [int(i) for i in draw if int(i) < len(ds[field_a][0])]
     n_draw = len(draw)
 
     counts = [False]*n_draw
@@ -124,15 +167,17 @@ def draw_woa_multi(
     vmax = np.nanmax(counts)
     
     if vmax == 0:
-        raise ValueError("maxmimum of counts is zero!")
+        ax.set_axis_off()
+        return(None)
+        # raise ValueError("maxmimum of counts is zero!")
     
 
     if cmaps is False:
         cmaps = [
             'Purples',
+            'Reds',
             'Blues',
             'Greens',
-            'Reds',
             'Oranges'
         ]
     if cmap_cb is False:
@@ -233,11 +278,16 @@ def draw_woa(ds, plugin = "event_fits_summary", draw = "all", title = "", ret = 
         return(fig, axs)
 
 
+def jr(runs, sep = ", "):
+    '''
+    joins list of anything (maily ints of runnumbers) to list
+    '''
+    return(sep.join(map(str, runs)))
 
 
 def rs(runs):
     '''
-    turns runs into a list of run strings
+    turns runs into a list of run strings (zero padded to five digits) to be used when loading data
     '''
     
     if isinstance(runs, int):
@@ -329,7 +379,7 @@ def load(runs, target, context = False, config = False, check_load = True, v = T
     runs = rs(runs)
     data =  context.get_array(runs, target, config = config, **kwargs)
     t1 = now()
-    if v is True: print(f"    data loaded: {len(runs)} entries in {t1-t0}")
+    if v is True: print(f"    data loaded: {len(data)} entries for {len(runs)} runs in {t1-t0}")
     return(data)
 
 c = {
@@ -415,9 +465,9 @@ def get_all_runs(query = False):
     runs_all = {db_i["run"]:db_i for db_i in db}
 
 
-    runs_all_dVs  = make_dV_dict(runs_all)
+    runs_all_df  = make_dV_df(runs_all)
     
-    return(runs_all, runs_all_dVs)
+    return(runs_all, runs_all_df)
     
     
     
@@ -1041,7 +1091,7 @@ def get_linage_todo(
     
     todo = []
     load_order = get_load_order(target)
-    config = find_config(target)
+    
     for i_load, load in enumerate(load_order):
         check = context.is_stored(
             run_id = f"{run:0>5}",
@@ -1071,6 +1121,7 @@ def process_linage(
     if config is False:
         config = find_config(target)
         if verbose: print(f"\33[33mconfig\33[0m: {config}")
+        
     if todo is False:
         todo = get_linage_todo(
             run = run,
@@ -1081,6 +1132,7 @@ def process_linage(
         )
             
     for target_todo in todo:
+        if verbose: print(f"\33[34m{target_todo}\33[0m is being loaded")
         if process is True:
             _ = load(
                 run, target_todo,
@@ -1093,3 +1145,260 @@ def process_linage(
             if verbose: print(f"\33[34m{target_todo}\33[0m not being loaded")
     return(None)
 
+
+
+
+
+
+# eff companion functions
+fit_par_bins = {
+    "t_S11": fhist.make_bins(0, 750, 10),
+    "t_decay": fhist.make_bins(0, 1500, 20),
+    "t_drift": fhist.make_bins(0, 60_000, 500),
+    "tau": fhist.make_bins(0, 100, 2),
+    "a": fhist.make_bins(0, 15, .25),
+    "sigma": fhist.make_bins(0, 750, 10),
+    "A1": fhist.make_bins(0, 10, .25),
+    "A2": fhist.make_bins(0, 10, .25),
+    "A3": fhist.make_bins(0, 15, .1),
+    "A4": fhist.make_bins(0, 1, .025),
+    "dct_offset": 25,
+}
+def hist_indiv(ax, data, bins, label = "", **kwargs):
+    c, b = np.histogram(data, bins = bins)
+    bc = fhist.get_bin_centers(b)
+    
+    ax.plot(
+        bc, c,
+        drawstyle = "steps-mid",
+        label = f"{label} ({np.sum(c):,.0f}/{len(data):,})",
+        **kwargs
+    )
+
+
+    
+    
+def draw_param(ax, dss, fef_i, title = ""):
+    
+    fef_par_label = eff.f_event_txt[fef_i]
+    
+    
+
+    
+    bins = fit_par_bins[fef_par_label]
+    n_drawn = 0
+    
+    for ds_label, ds in dss.items():
+        fit_field, fit_labels, fit_units = eff.get_fit_infos(ds)
+        if fef_par_label in fit_labels:
+            fit_i = fit_labels.index(fef_par_label)
+            data = ds[fit_field][:, fit_i]
+            style = dict(alpha = .75)
+            n_drawn += 1
+        else:
+            data = []
+            style = dict(alpha = .25, linestyle = "dashed")
+        hist_indiv(ax, data = data, bins = bins, label = ds_label, **style)
+    
+    
+    if n_drawn > 0:
+        ax.set_title(f"{title} ({fef_i}: {fef_par_label})")
+        ax.set_xlabel(f"{fef_par_label} / {eff.f_units[fef_par_label]}")
+        ax.set_ylabel("counts")
+        ax.set_yscale("log")
+        ax.legend(loc = "upper right")
+    
+    return(n_drawn)
+
+def draw_all_kr_lifetimes(dss, fo, prefix = "", suffix = "", title = ""):
+    qp(f"\n(12) \33[34mKr lifetime\33[0m")
+    ax = fhist.ax(w = 10)
+    ax.set_title(title)
+    
+    plt.subplots_adjust(left = .10, right = .7)
+    for ds_label, ds in dss.items():
+        _ = get_kr_lifetime_from_run(
+            kr = ds,
+            ax = ax,
+            draw_info = False,
+            draw_fit = False,
+            t_lims = (150, 1000),
+            label = ds_label
+        )
+        fhist.add_fit_parameter(ax, "\\tau", *_[0], "ns")
+        fhist.addlabel(ax, " ")
+    ax.set_yscale("log")
+    ax.legend(loc = (1.01, -.10))
+    qp(", saving")
+    plt.savefig(f"{fo}/{prefix}12_Kr_lifetime{suffix}.png")
+    qp(", closing")
+    plt.close()
+    qp(", done")
+
+
+def draw_all_param(dss, fo, prefix = "", suffix = "", title = ""):
+    for i_fit_label, label in enumerate(eff.f_event_txt):
+        qp(f"\n({i_fit_label:>2}) \33[34m{label}\33[0m")
+
+        ax = fhist.ax()
+        n_drawn = draw_param(ax, dss, i_fit_label, title = title)
+
+        if n_drawn > 0:
+            qp(", saving")
+            plt.savefig(f"{fo}/{prefix}{i_fit_label:0>2}_{label}{suffix}.png")
+        else:
+            qp(", \33[31mnothing drawn\33[0m")
+        qp(", closing")
+        plt.close()
+        qp(", done")
+    draw_all_kr_lifetimes(dss = dss, fo=fo, prefix = prefix, suffix = suffix, title = title)
+    print("\nALL  Done")
+    
+
+
+
+
+
+labels_ops = {
+    "lt":  "<", "le": "<=",
+    "gt":  ">", "ge": ">=",
+    "eq": "==", "ne": "!=",
+}  
+
+    
+def check_x(x, op, y, fallback = True, v = False):
+    '''
+    wrapper function that performs check 'op' on x against y
+    
+    x: the values to check
+    op: the operation that is uesed to check
+        (see 'labels_ops' to see some available parameters)
+    y: the value to check against
+    
+    
+    fallback (True): an array like x full of 'fallback' will be returned if:
+        - op or __op__ does not exist in x
+        - calling op or __op__ causes an error
+    
+    '''
+    
+    x_dir = x.__dir__()
+    dunder_op = f"__{op}__"
+    op_call = False
+    if op in x_dir:
+        op_call = f"{op}"
+    elif dunder_op in x_dir:
+        op_call = f"{dunder_op}"
+
+    try:
+        ylen = len(y)
+    except TypeError:
+        ylen = 1
+        
+    xshape = x.shape
+    if len(xshape) > 1:
+        if xshape[1] > ylen:
+            if v: print("shortened x to match y")
+            x = x[:, :ylen]
+        else:
+            if v: print("shortened y to match x")
+            y = y[:xshape[1]]
+    elif ylen > 1:
+        if v: print("shortened y to match x")
+        y = y[0]
+        
+    
+    str_op = f"{op}"
+    if op in labels_ops:
+        str_op = f"{labels_ops[op]}"
+    else:
+        str_op = f"{op}"
+    
+    if op_call is False:
+        if v: print(f"\33[31mcan't find '{op}' in x\33[0m")
+        return(fallback * np.ones_like(x))
+        
+        
+    if v: print(f"{op_call} ({str_op}) in x")
+    
+    call = x.__getattribute__(op_call)
+    try:
+        try:
+            result = call(y)
+        except TypeError:
+            result = call()
+        return(result)
+    except Exception as e:
+        print(f"failed appliying {op_call} to x: \33[31m{e}\33[0m")
+        return(fallback * np.ones_like(x))
+
+
+
+
+def filter_ds(ds, filters):
+    '''
+        allows the quick filtering of datasets
+    '''
+    try:
+        fit_field, fit_labels, fit_units = eff.get_fit_infos(ds)
+    except IndexError:
+        fit_field, fit_labels, fit_units = [], [], []
+    
+    dsf = ds
+    for par, *filt in filters:
+        # part where values are obtained
+        if callable(par):
+            vs = par(dsf)
+            print(f"  \33[36m{par.__name__}:\33[0m ", end = "")
+        else:
+            pars_derived = get_field(dsf, par)
+            if isinstance(pars_derived, str):
+                par = pars_derived
+            print(f"  \33[34m{par}:\33[0m ", end = "")
+            if par in ds.dtype.names:
+                vs = dsf[par]
+            elif par in fit_labels:
+                id_field = fit_labels.index(par)
+                vs = dsf[fit_field][:, id_field]
+            else:
+                print(f"\33[31m(parameter not found)\33[0m")
+                continue
+
+        # part where all checks are performed
+        for op, lim in filt:
+            print(f" ({op}: {lim})", end = "")
+            chk = check_x(vs, op, lim)
+
+            if len(vs.shape) != 1:
+                chk = np.all(chk, axis = 1)
+            dsf = dsf[chk]
+            vs = vs[chk]
+        print()
+    print(f"    N: {len(ds)} --> {len(dsf)}")
+    return(dsf)
+    
+    
+    
+    
+def label_filters(ax, filters, loc = "upper right"):
+
+    for par, *filt in filters:
+        if callable(par):
+            par_str = f"{par.__name__}()"
+        else:
+            par_str = f"{par}"
+        for op, lim in filt:
+            if op in labels_ops:
+                op_str = labels_ops[op]
+            else:
+                op_str = f"{op}"
+                
+            fhist.addlabel(ax, f" {par_str} {op_str} {lim}")
+    if loc is not False:
+        try:
+            ax.legend(loc = loc)
+        except Exception:
+            pass
+            
+            
+            
