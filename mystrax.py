@@ -12,16 +12,25 @@ import matplotlib as mpl
 def now():
     return(datetime.now())
 
+mystrax_limporttime = now()
+def age():
+    print(f"strax loaded at {mystrax_limporttime} (age: {now() - mystrax_limporttime})")
+
+
+
+
+tcol = "\33[36m"
+
 # import 
 sys.path.insert(0,"/data/workspace/Flo/straxbra_flo/strax")
 import strax
-print("\33[34mStrax:\33[0m")
+print(f"{tcol}Strax:\33[0m")
 print(f"Strax version: {strax.__version__}")
 print(f"Strax file:    {strax.__file__}")
 
 sys.path.insert(0,"/data/workspace/Flo/straxbra_flo/straxbra")
 import straxbra
-print("\33[34mStraxbra:\33[0m")
+print(f"{tcol}Straxbra:\33[0m")
 print(f"straxbra file:           {straxbra.__file__}")
 # print(f"straxbra version:        {straxbra.__version__}")
 # print(f"SpKrypton version:       {straxbra.plugins.SpKrypton.__version__}")
@@ -38,7 +47,7 @@ db = straxbra.utils.db
 
 labels = {
     "event_fits": np.array(["first S1", "second S1", "first S2", "second S2"]),
-    "event_fits_summary": np.array(["first S1", "second S1", "first S2", "second S2", "total S1", "total S2"]),
+    "event_fits_summary": np.array(["first S1", "second S1", "first S2", "second S2", 'unsplit S1', 'unsplit S2', "total S1", "total S2"]),
     "sp_krypton_summary": np.array(['first S1', 'second S1', 'first S2', 'second S2', 'unsplit S1', 'unsplit S2', 'total S1', 'total S2']),
     
 }
@@ -319,7 +328,7 @@ def check(runs, target, context = False, config = False, cast_int = True, v = Tr
     runs = rs(runs)
     
     t0 = now()
-    if v is True: print(f"checking \33[1m\33[34m{target}\33[0m for {len(runs)} runs...")
+    if v is True: print(f"checking \33[1m{tcol}{target}\33[0m for {len(runs)} runs...")
     runs = [r for r in runs if context.is_stored(r, target, config = config)]
     t1 = now()
     if cast_int is True:
@@ -374,7 +383,7 @@ def load(runs, target, context = False, config = False, check_load = True, v = T
         return None
         
     t0 = now()
-    if v is True: print(f"loading \33[1m\33[34m{target}\33[0m of {len(runs)} runs...")
+    if v is True: print(f"loading \33[1m{tcol}{target}\33[0m of {len(runs)} runs...")
     
     runs = rs(runs)
     data =  context.get_array(runs, target, config = config, **kwargs)
@@ -436,10 +445,17 @@ def make_dV_dict(runs_all):
     return(runs_all_dVs)
 
 
-def make_dV_df(runs_all):
+def make_df(runs_all):
     df = pd.DataFrame()
+    t0 = min([x["start"] for r, x in runs_all.items()])
+    
     for r, d in runs_all.items():
-        d = {"run": r, **flatten_dict(d)}
+        d = {
+            "run": r,
+            "t_rel": (d["start"] - t0).total_seconds(),
+            **flatten_dict(d),
+            
+        }
         df = df.append(d, ignore_index=True)
         
     df = df.astype({
@@ -465,7 +481,7 @@ def get_all_runs(query = False):
     runs_all = {db_i["run"]:db_i for db_i in db}
 
 
-    runs_all_df  = make_dV_df(runs_all)
+    runs_all_df  = make_df(runs_all)
     
     return(runs_all, runs_all_df)
     
@@ -507,13 +523,13 @@ def get_unit_sp(x):
 
 
 
-print("\33[34mPython:\33[0m")
+print(f"{tcol}Python:\33[0m")
 print(sys.executable)
 print(sys.version)
 print(sys.version_info)
 
 folder_cache = "/data/storage/strax/cached/singlephase"
-print(f"\33[32mImport done at {datetime.now()}\33[0m")
+print(f"{tcol}Import done at {datetime.now()}\33[0m")
 
 
 
@@ -878,10 +894,10 @@ def load_run_kr(runs, config = False, mconfig = None, gs = False, W = 13.5, retu
     
     
     if "calibrate" in kwargs:
-        print("\33[41mlegacy parameter 'calibrate' was used. Use 'correct' instead\33[0m")
+        print("\33[31mlegacy parameter 'calibrate' was used. Use 'correct' instead\33[0m")
         correct = calibrate
     if "peaks" in kwargs:
-        print("\33[41mlegacy parameter 'peaks' was used. Use 'return_peaks' instead\33[0m")
+        print("\33[31mlegacy parameter 'peaks' was used. Use 'return_peaks' instead\33[0m")
         return_peaks = peaks
     
     
@@ -909,9 +925,9 @@ def load_run_kr(runs, config = False, mconfig = None, gs = False, W = 13.5, retu
     print("start loading data")    
     
     
-    print("  \33[34mconfig:\33[0m")
+    print(f"  {tcol}config:\33[0m")
     for key, value in config.items():
-        print(f"    \33[35m{key}:\33[0m {value}")
+        print(f"    {tcol}{key}:\33[0m {value}")
     
     
     sp = context.get_array(runs_str, "sp_krypton", config = config)
@@ -1083,10 +1099,10 @@ def get_linage_todo(
 ):
     if context is False:
         context = context_sp
-        if verbose: print("\33[33mcontext\33[0m: default to context_sp")
+        if verbose: print(f"{tcol}context\33[0m: default to context_sp")
     if config is False:
         config = find_config(target)
-        if verbose: print(f"\33[33mconfig\33[0m: {config}")
+        if verbose: print(f"{tcol}config\33[0m: {config}")
     load_order = get_load_order(target)
     
     todo = []
@@ -1098,7 +1114,7 @@ def get_linage_todo(
             target = load,
             config = config,
         )
-        if verbose: print(f"* \33[34m{load}\33[0m: {check}")
+        if verbose: print(f"* {tcol}{load}\33[0m: {check}")
         if check is True:
             break
         todo.insert(0, load)
@@ -1113,36 +1129,51 @@ def process_linage(
     todo = False,
     process = True,
     verbose = True,
-    
+    title = False,
+    f_clear = False
 ):
-    if context is False:
-        context = context_sp
-        if verbose: print("\33[33mcontext\33[0m: default to context_sp")
-    if config is False:
-        config = find_config(target)
-        if verbose: print(f"\33[33mconfig\33[0m: {config}")
-        
-    if todo is False:
-        todo = get_linage_todo(
-            run = run,
-            target = target,
-            config = config,
-            context = context,
-            verbose = verbose,
-        )
+    if not isinstance(run, (str, int)):
+        for i_r, r in enumerate(run):
+            if callable(f_clear):
+                f_clear()
+            print(f"{i_r+1}/{len(run)}: {r}")
+            process_linage(
+                r, target = target,
+                context = context, config = config,
+                todo = todo, process = process,
+                verbose = verbose, title = title,
+            )
+    else:
+        if context is False:
+            context = context_sp
+            if verbose: print(f"{tcol}context\33[0m: default to context_sp")
+        if config is False:
+            config = find_config(target)
+            if verbose: print(f"{tcol}config\33[0m: {config}")
             
-    for target_todo in todo:
-        if verbose: print(f"\33[34m{target_todo}\33[0m is being loaded")
-        if process is True:
-            _ = load(
-                run, target_todo,
+        if todo is False:
+            todo = get_linage_todo(
+                run = run,
+                target = target,
                 config = config,
                 context = context,
-                v = False, 
-                check_load = False
+                verbose = verbose,
             )
-        else:
-            if verbose: print(f"\33[34m{target_todo}\33[0m not being loaded")
+                
+        for target_todo in todo:
+            if title is not False:
+                print(f"\n\033]0;{title}: {target_todo}\a", flush = True)
+            if verbose: print(f"{tcol}{target_todo}\33[0m is being loaded")
+            if process is True:
+                _ = load(
+                    run, target_todo,
+                    config = config,
+                    context = context,
+                    v = False, 
+                    check_load = False
+                )
+            else:
+                if verbose: print(f"{tcol}{target_todo}\33[0m not being loaded")
     return(None)
 
 

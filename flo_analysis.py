@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import decimal
 from flo_fancy import *
 from default_bins import *
+import gate_cathode as gc
 
 import inspect
 from datetime import datetime
@@ -28,9 +29,6 @@ from datetime import datetime
 
 
 
-
-def qp(*args, sep = ", ", end = "", flush = True):
-    print(sep.join(map(str, args)), end = end, flush = flush)
 
     
 def np_array_all(*args):
@@ -283,12 +281,22 @@ def correct_s1(kr, tpc_corrections, corr_pars):
     return(None)
     
 
-def correct_s2(kr, lifetime):
-    # replace by np.exp((kr["time_drift"]-t_ref)/lifetime)
-    kr["cS2"] = kr["area_s2"] * np.exp(kr["time_drift"]/lifetime)
-    kr["cS21"] = kr["area_s21"] * np.exp(kr["time_drift"]/lifetime)
-    kr["cS22"] = kr["area_s22"] * np.exp(kr["time_drift"]/lifetime)
+def correct_s2(ds, lifetime):
+    # replace by np.exp((ds["time_drift"]-t_ref)/lifetime)
+    def corr_s2(s2, dt, lt):
+        return(s2 * np.exp(dt/lt))
+    
+    dtype_names = ds.dtype.names
+    if "cS2" in dtype_names:
+        ds["cS2"]  = corr_s2(ds["area_s2" ], ds["time_drift"], lifetime)
+        ds["cS21"] = corr_s2(ds["area_s21"], ds["time_drift"], lifetime)
+        ds["cS22"] = corr_s2(ds["area_s22"], ds["time_drift"], lifetime)
+    elif "areas_corrected" in dtype_names:
+        for i in [2,3,5,7]:
+            ds["areas_corrected"][:,i] = corr_s2(ds["areas"][:,i], ds["drifttime"], lifetime)
+            
     return(None)
+    
     
     
 def lin(x, a, c):
@@ -296,7 +304,7 @@ def lin(x, a, c):
     
 def corr_lin(x, y, tpc_corrections, corr_pars):
     
-    t_gate, t_cath, *_ = tpc_corrections
+    t_6, t_cath, *_ = tpc_corrections
     t_end = (t_cath - t_gate)
     t0 = t_end/2
     
@@ -450,12 +458,12 @@ def get_constant_chi2_for_binned_data(bins, ax = False, linestyle = "dashed", co
 
 
 
+
+
+
 def fit_gate(ax, x, y, sy, f = ff.sigmoid_lin, show_p0 = False):
     p0 = f.p0(x, y)
     xp = np.linspace(min(x), max(x), 1000)
-    fhist.addlabel(ax, f)
-    if show_p0 is True:
-        ax.plot(xp, f(xp, *p0), label = "p0") 
     
     fit, cov = curve_fit(
         f,
@@ -468,17 +476,23 @@ def fit_gate(ax, x, y, sy, f = ff.sigmoid_lin, show_p0 = False):
     
     yf = f(xp, *fit)
     chi2 = fhist.chi_sqr(f, x, y, sy, *fit)
-    ax.plot(xp, yf,
-        label = f"sigmoid fit {chi2[-1]}"
-    )
     
-    for v, sv, p, u in zip(
-        fit, sfit,
-        f,
-        ["µs", "µs", "", "", "1/µs"],
-    ):
-        fhist.add_fit_parameter(ax, p, v, sv, u, fmt = ".2f")
-    
+    if isinstance(ax, plt.Axes):
+        fhist.addlabel(ax, f)
+        if show_p0 is True:
+            ax.plot(xp, f(xp, *p0), label = "p0") 
+        
+        ax.plot(xp, yf,
+            label = f"sigmoid fit {chi2[-1]}"
+        )
+        
+        for v, sv, p, u in zip(
+            fit, sfit,
+            f,
+            ["µs", "µs", "", "", "1/µs"],
+        ):
+            fhist.add_fit_parameter(ax, p, v, sv, u, fmt = ".2f")
+        
     mu = fit[0]
     smu = sfit[0]
     spr = fit[1]
@@ -490,10 +504,6 @@ def fit_gate(ax, x, y, sy, f = ff.sigmoid_lin, show_p0 = False):
 def fit_cathode(ax, x, y, sy, f = ff.sigmoid, show_p0 = False):
     p0 = f.p0(x, y)
     xp = np.linspace(min(x), max(x), 1000)
-    fhist.addlabel(ax, f)
-    if show_p0 is True:
-        ax.plot(xp, f(xp, *p0), label = "p0") 
-    
     
     fit, cov = curve_fit(
         f,
@@ -507,16 +517,22 @@ def fit_cathode(ax, x, y, sy, f = ff.sigmoid, show_p0 = False):
     
     
     chi2 = fhist.chi_sqr(f, x, y, sy, *fit)
-    ax.plot(xp, yf,
-        label = f"sigmoid fit {chi2[-1]}"
-    )
+
+    if isinstance(ax, plt.Axes):
+        fhist.addlabel(ax, f)
+        if show_p0 is True:
+            ax.plot(xp, f(xp, *p0), label = "p0") 
     
-    for v, sv, p, u in zip(
-        fit, sfit,
-        f,
-        ["µs", "µs", "1/s", "1/s"],
-    ):
-        fhist.add_fit_parameter(ax, p, v, sv, u, fmt = ".2f")
+        ax.plot(xp, yf,
+            label = f"sigmoid fit {chi2[-1]}"
+        )
+        
+        for v, sv, p, u in zip(
+            fit, sfit,
+            f,
+            ["µs", "µs", "1/s", "1/s"],
+        ):
+            fhist.add_fit_parameter(ax, p, v, sv, u, fmt = ".2f")
     
     
     mu = fit[0]
@@ -526,7 +542,7 @@ def fit_cathode(ax, x, y, sy, f = ff.sigmoid, show_p0 = False):
     return(mu, smu, spr, sspr, (fit, sfit, cov, chi2))
 
 
-def find_electrode(kr, ax, what = "gate", show_p0 = False, bin_x_offset=0, style_cathode = None, **kwargs):
+def find_electrode(kr, ax = False, what = "gate", show_p0 = False, bin_x_offset=0, style_cathode = None, **kwargs):
     '''
     function that will find electrodes
 
@@ -548,7 +564,8 @@ def find_electrode(kr, ax, what = "gate", show_p0 = False, bin_x_offset=0, style
     mu, smu, spr, sspr, rest = np.nan, np.nan, np.nan, np.nan, (np.nan, np.nan, np.nan, (np.nan, np.nan, np.nan, np.nan, np.nan, ))
     
     
-    data_x = kr["time_drift"]
+    # data_x = kr["time_drift"]
+    data_x = kr["drifttime"]
     bw = default_bw[f"search_{what}"]
     
     
@@ -572,26 +589,22 @@ def find_electrode(kr, ax, what = "gate", show_p0 = False, bin_x_offset=0, style
         }
         
     
-    ax.set_title(settings[what][0])
-    ax.set_ylabel(settings[what][1])
-    ax.set_xlabel("drift time / µs")
-    fhist.addlabel(ax, f"iteration: {bin_x_offset+1}")
-    
     l = False
     try:
         if what == "gate":
-            data_y = kr[f"area_s1"]
+            data_y = kr[f"areas"][:, 6]
             x, y, _, sy, l = get_binned_data(
                 data_x, data_y, bins_x_ref,
                 show_p0=show_p0,
-                save_plots_suffix = f"iteration_{bin_x_offset+1}",
+                # save_plots_suffix = f"iteration_{bin_x_offset+1}",
                 #prefix_png
                 **kwargs
             )
             y, sy, l, x = fhist.remove_zero(y, sy, l, x)
             N = np.sum(l)
-            plt_ = ax.plot(x, y, ".", label = f"Data (bw: {bw} µs, N: {N:.0f})")[0]
-            ax.axvline(min(S1_correction_window), label = "start of correction", **style_cathode)
+            if isinstance(ax, plt.Axes):
+                plt_ = ax.plot(x, y, ".", label = f"Data (bw: {bw} µs, N: {N:.0f})")[0]
+                ax.axvline(min(S1_correction_window), label = "start of correction", **style_cathode)
             mu, smu, spr, sspr, rest = fit_gate(ax, x, y, sy, show_p0 = show_p0)
             leg_pos = "upper right"
 
@@ -603,23 +616,29 @@ def find_electrode(kr, ax, what = "gate", show_p0 = False, bin_x_offset=0, style
             y, sy, x = fhist.remove_zero(y, sy, x)
             N = np.sum(y)
             
-            plt_ = ax.plot(x, y, ".", label = f"Data (bw: {bw} µs, N: {N:.0f})")[0]
-            ax.axvline(max(S1_correction_window), label = "end of correction", **style_cathode)
+            if isinstance(ax, plt.Axes):
+                plt_ = ax.plot(x, y, ".", label = f"Data (bw: {bw} µs, N: {N:.0f})")[0]
+                ax.axvline(max(S1_correction_window), label = "end of correction", **style_cathode)
             mu, smu, spr, sspr, rest = fit_cathode(ax, x, y, sy, show_p0 = show_p0)
             leg_pos = "upper left"
         
-        
-        xlim = ax.get_xlim()
-        ylim = ax.get_ylim()
-        fhist.errorbar(ax, x, y, sy, color = plt_.get_color())
-        
-        
-        ax.axvline(mu, color = "green")
-        ax.axvspan(mu - smu/2, mu + smu/2, color = "green", alpha = .2)
-        ax.axvspan(mu - spr/2, mu + spr/2, color = "green", alpha = .1)
-        ax.set_xlim(xlim)
-        ax.set_ylim(ylim)
-        ax.legend(loc = leg_pos)
+
+        if isinstance(ax, plt.Axes):
+            ax.set_title(settings[what][0])
+            ax.set_ylabel(settings[what][1])
+            ax.set_xlabel("drift time / µs")
+            fhist.addlabel(ax, f"iteration: {bin_x_offset+1}")
+            xlim = ax.get_xlim()
+            ylim = ax.get_ylim()
+            fhist.errorbar(ax, x, y, sy, color = plt_.get_color())
+            
+            
+            ax.axvline(mu, color = "green")
+            ax.axvspan(mu - smu/2, mu + smu/2, color = "green", alpha = .2)
+            ax.axvspan(mu - spr/2, mu + spr/2, color = "green", alpha = .1)
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
+            ax.legend(loc = leg_pos)
         return(mu, smu, spr, sspr, N, rest)
         
     except Exception as e:
@@ -630,7 +649,7 @@ def find_electrode(kr, ax, what = "gate", show_p0 = False, bin_x_offset=0, style
         
 
 
-def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_fits = False, N_bin_offsets = 4, return_fit = True, prefix_png = ""):
+def find_both_electrodes(kr, run_label, folder_out = False, show_p0 = False, save_fits = False, N_bin_offsets = 4, return_fit = True, prefix_png = ""):
     '''
         wraper function for find_electrode that will wiggle the bins if a try is unsuccessfull
     '''
@@ -659,17 +678,18 @@ def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_f
         
         for bin_x_offset in range(N_bin_offsets):
             iteration = bin_x_offset+1
-            fig, ax = fhist.make_fig(1, w = 6, h = 4, rax=False)
-            
-            plt.suptitle(f"Run: {run_label} (Iteration: {iteration})")
-
+            if folder_out is not False:
+                fig, ax = fhist.make_fig(1, w = 6, h = 4, rax=False)
+                plt.suptitle(f"Run: {run_label} (Iteration: {iteration})")
+            else:
+                ax = False
             
             print(f"{iteration:>6}: ", end = "")
             
             try:
                 mu, smu, sfit, N, chi2 = np.nan, np.nan, np.inf, np.nan, (np.nan, np.nan, np.nan)
                 spr, sspr = np.nan, np.nan
-                if save_fits is True:
+                if (save_fits is True) and (folder_out is not False):
                     save_plots = f"{folder_out}/fits/gate_{prefix_png}{run_label}"
                 else:
                     save_plots = None
@@ -695,11 +715,12 @@ def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_f
             except Exception as e:
                 print(e)
             finally:
-                plt.subplots_adjust(
-                    left = .1,
-                    right = .98,
-                )
-                plt.savefig(f"{folder_out}/{what}_for_run_{prefix_png}{run_label}_iteration{iteration}.png", dpi = 200)
+                if folder_out is not False:
+                    plt.subplots_adjust(
+                        left = .1,
+                        right = .98,
+                    )
+                    plt.savefig(f"{folder_out}/{what}_for_run_{prefix_png}{run_label}_iteration{iteration}.png", dpi = 200)
                 plt.close()
             
         # merge results here
@@ -726,7 +747,7 @@ def find_both_electrodes(kr, run_label, folder_out = "", show_p0 = False, save_f
 
 
 
-def get_e_lifetime_from_run(kr, ax = False, bins = None, field = "area_s2", show_linearity = False, plt_x_offset = False, *args, **kwargs):
+def get_e_lifetime_from_run(kr, ax = False, bins = None, field = "area_s2", show_linearity = False, plt_x_offset = False, correct = False, *args, **kwargs):
     '''
 calculates the electron lifetime of a run based on the uncorrected S2 area and the drift time
 
@@ -750,8 +771,20 @@ the lifetime plus uncertainty (in  µs)
     
     if bins is None:
         bins = default_bins["drifttime"]
-
-    bc, median, md_sd, md_unc, md_len = get_binned_data(kr["time_drift"], kr[field], bins, save_plots_suffix = "_uncorrected", *args, **kwargs)
+    
+    
+    
+    names_check = ["drifttime", "time_drift"]
+    names = kr.dtype.names
+    # why raise an error myself if pythgon does it 
+    field_x = [f for f in names_check if f in names][0]
+    data_x = kr[field_x]
+    
+    
+    data_y = kr["areas"][:,7]
+    
+    
+    bc, median, md_sd, md_unc, md_len = get_binned_data(data_x, data_y, bins, save_plots_suffix = "_uncorrected", *args, **kwargs)
     
     
     
@@ -777,9 +810,9 @@ the lifetime plus uncertainty (in  µs)
     ycf = exp_decay_zero(xc, *fit)
 
 
-
-    correct_s2(kr, fit[1])
-    cbc, cmedian, cmd_sd, cmd_unc, cmd_len = get_binned_data(kr["time_drift"], kr["cS2"], bins, save_plots_suffix = "_corrected", *args, **kwargs)
+    if correct is True:
+        correct_s2(kr, fit[1])
+        cbc, cmedian, cmd_sd, cmd_unc, cmd_len = get_binned_data(kr["time_drift"], kr["cS2"], bins, save_plots_suffix = "_corrected", *args, **kwargs)
 
 
 
@@ -796,18 +829,19 @@ the lifetime plus uncertainty (in  µs)
         fhist.addlabel(ax, f"$A = {fit[0]:.1f}\\pm{sfit[0]:.1f}$")
         fhist.addlabel(ax, f"$C$ fixed to 0")
 
-
-        cbcp = cbc
-        label_cs2 = f"cS2"
-        if plt_x_offset is not False:
-            print(f"plt_x_offset: {plt_x_offset:.1f}")
-            cbcp = cbc + plt_x_offset
-            label_cs2 = f"cS2 (shifted by {plt_x_offset:.1f} µs)"
-        
-        plt_data_c = ax.plot(cbcp, cmedian, "x", label = label_cs2)[0]
-        fhist.errorbar(ax, cbcp, cmedian, cmd_unc, color = plt_data_c.get_color())
-        
-        
+        if correct is True:
+            cbcp = cbc
+            label_cs2 = f"cS2"
+            if plt_x_offset is not False:
+                print(f"plt_x_offset: {plt_x_offset:.1f}")
+                cbcp = cbc + plt_x_offset
+                label_cs2 = f"cS2 (shifted by {plt_x_offset:.1f} µs)"
+            
+            plt_data_c = ax.plot(cbcp, cmedian, "x", label = label_cs2)[0]
+            fhist.errorbar(ax, cbcp, cmedian, cmd_unc, color = plt_data_c.get_color())
+            binsc = {"binsc": (cbc, cmedian, cmd_sd, cmd_unc, cmd_len)}
+        else:
+            binsc = {}
         
         if show_linearity is True:
             chi2_lin = get_constant_chi2_for_binned_data(
@@ -830,7 +864,7 @@ the lifetime plus uncertainty (in  µs)
         "cS2_0": (fit[0], sfit[0]),
         "chi2": (chi2[2], chi2[4]),
         "binsu": (bc, median, md_sd, md_unc, md_len),
-        "binsc": (cbc, cmedian, cmd_sd, cmd_unc, cmd_len),
+        **binsc,
     })
     
     
@@ -987,10 +1021,12 @@ def get_kr_lifetime_from_run(
             
         print(f"\33[31mfit failed: \33[0m{e}")
         
-    if isinstance(ax, plt.Axes) and (draw_info is True):
-        if show_lit is True:
-            fhist.add_fit_parameter(ax, "\\tau_\mathrm{lit}", tau_lit, stau_lit, u = "ns")
-        ax.legend(loc = "upper right")
+    if isinstance(ax, plt.Axes):
+        ax.set_yscale("log")
+        if (draw_info is True):
+            if show_lit is True:
+                fhist.add_fit_parameter(ax, "\\tau_\mathrm{lit}", tau_lit, stau_lit, u = "ns")
+            ax.legend(loc = "upper right")
         
     return((fit[1], sfit[1]), {"fit":fit, "sfit":sfit, "cov": cov, "chi2": chi2})
     

@@ -9,9 +9,31 @@ def make_bins(x0, x1, bw):
     '''
     return(np.arange(x0-bw/2, x1+bw, bw))
 
+def nice_bins(x, bw = False, nbins = 20, percentile = .90, width = .5):
+    '''
+    makes nice bins for x
+    bin width specified directly or calculated from nbins
+    
+    percentile: fraction of datapooints in range (to remove outliers)
+    width: how much the binning range should be extended in each direction
+    '''
 
+    min_, max_ = np.percentile(x, [100*(1-percentile), 100*percentile])
 
-
+    range_ = np.abs(max_ - min_)
+    mid = (max_ - min_)/2
+    
+    min_ = min_ - range_*width
+    max_ = max_ + range_*width
+    
+    if isinstance(nbins, int) and bw is False:
+        bw = (max_-min_)/nbins
+    
+    if bw is False:
+        raise ValueError("specify bw (bin width) or nbins (number of bins)")
+    
+    bins = make_bins(np.floor(min_/bw)*bw, np.ceil(max_/bw)*bw, bw)
+    return(bins)
 
 
 tpc_corrections = (3.40, 42.24, 69, 5, 40)
@@ -37,6 +59,10 @@ default_bins["search_gate"] = make_bins( 1.5, 10, default_bw["search_gate"])
 default_bins["search_cath"] = make_bins(32,   52, default_bw["search_gate"])
 
 default_bins["decay_time"] = make_bins(0, 2500, 100)
+
+default_bins["find_gate"] = make_bins( 0, 25, 1)
+default_bins["find_cath"] = make_bins(32,   52, 1)
+
 
 
 

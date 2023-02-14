@@ -1,5 +1,9 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import inspect
+from flo_fancy import *
+from scipy.optimize import curve_fit
+
 
 def get_default_args(func):
     signature = inspect.signature(func)
@@ -55,6 +59,95 @@ class fit_function:
 
 
 
+
+def fit(f, x, y, sigma = None, ax = False, units = None, color = None, kwargs_curvefit = None, kwargs_plot = None):
+    
+    
+    if not isinstance(f, fit_function):
+        return(False)
+    try:
+        if not isinstance(kwargs_curvefit, dict):
+            kwargs_curvefit = {}
+        if not isinstance(kwargs_plot, dict):
+            kwargs_plot = {}
+        p0 = f.p0(x, y)
+
+        fit, cov = curve_fit(
+            f.f, 
+            x, y,
+            sigma=sigma,
+            absolute_sigma=True,
+            p0 = p0,
+            **kwargs_curvefit
+        )
+
+        sfit = np.diag(cov)**.5
+        if sigma is not None:
+            chi2 = chi_sqr(f, x, y, sigma, *fit)
+            chi_str = f" {chi2[4]}"
+        else:
+            chi2 = False
+            chi_str = f""
+        if isinstance(ax, plt.Axes):
+            xp = np.linspace(min(x), max(x), 1000)
+            yf = f(xp, *fit)
+            color = ax.plot(xp, yf, label = f"fit{chi_str}", color = color, **kwargs_plot)[0].get_color()
+
+            if units is None:
+                units = [""]*len(f)
+            add_fit_parameters(ax, f, fit, sfit, units)
+
+        return(fit, sfit, chi2)
+    except Exception as e:
+        print(e)
+        return(False)
+    
+
+
+
+
+# constant function
+def f_poly_0(x, c):
+    return(0*x+c)
+    
+def f_p0_poly_0(x, y):
+    x_, y_ = clean(x, y)
+    return(np.mean(y))
+    
+poly_0 = fit_function(
+    f = f_poly_0,
+    f_p0 = f_p0_poly_0,
+    description = "constant function",
+    short_description = "c",
+    parameters = ["c"],
+    parameters_tex = ["c"],
+    formula = "c",
+    formula_tex = "$c$",
+    docstring = ''''''
+) 
+
+
+
+
+# first order polynomial
+def f_poly_1(x, m, c):
+    return(m*x+c)
+    
+def f_p0_poly_1(x, y):
+    x_, y_ = clean(x, y)
+    return(np.polyfit(x_, y_, deg = 1))
+    
+poly_1 = fit_function(
+    f = f_poly_1,
+    f_p0 = f_p0_poly_1,
+    description = "first order polynomial",
+    short_description = "lin + c",
+    parameters = ["m", "c"],
+    parameters_tex = ["m", "c"],
+    formula = "mx + c",
+    formula_tex = "$m x + c$",
+    docstring = ''''''
+) 
 
 
 # exponential decay with constant
@@ -176,11 +269,11 @@ def f_sigmoid_lin(x, mu=0, sigma=1, y0=0, y1=1, a=0):
 
 def f_p0_sigmoid_lin(x, y):
     return([
-        x[np.argmax(np.abs(np.diff(y))/np.diff(x))], # mu
-        (x[-1]-x[0])/20, # sigma
+        3.5, # mu
+        0.3, # sigma
         np.mean(y[:3]),  # y0
-        np.mean(y[-3:]),  # y1
-        0,               # a  
+        np.mean(y[-3:]), # y1
+        0.015,           # a  
     ])
 
 sigmoid_lin = fit_function(
@@ -202,18 +295,26 @@ usage: y = sigmoid(x; mu, sigma, y1, y0, a)
 
 
 # gauss function
-def gaus(x, A=1, mu=0, sigma=1):
+def f_gauss(x, A=1, mu=0, sigma=1):
     return(
         A * np.exp(-(np.array(x)-mu)**2 / (2*sigma)**2)
     )
-def f_p0_gaus(x, y):
-    return(max(y), x[np.argmax(y)], (x[1]-x[0])/5)
-    
+def f_p0_gauss(x, y):
+    A = max(y)
+    ycs = np.cumsum(y) / np.sum(y)
+    bounds = np.interp([.16, .84], ycs, x)
+    sigma = np.abs(np.diff(bounds)[0]/2)
+    return(
+        A,
+        x[np.argmax(y)],
+        sigma
+    )
     
 gauss = fit_function(
-    f = gaus,
-    f_p0 = f_p0_gaus,
+    f = f_gauss,
+    f_p0 = f_p0_gauss,
     description = "gauss function without constant term",
+    short_description  = "gauss function", 
     parameters = ["A", "mu", "sigma"],
     parameters_tex = ["A", "\\mu", "\\sigma"],
     formula = "A exp(-(x-mu)^2 /(2 sigma)^2)",
@@ -227,19 +328,24 @@ def gaus2(x, A1=1, mu1=0, sigma1=1, A2=1, mu2=0, sigma2=1):
         + A2 * np.exp(-(np.array(x)-mu2)**2 / (2*sigma2)**2)
     )
 def f_p0_gaus2(x, y):
-    A1 = max(y)
-    A2 = A1 / 10
-    mu = x[np.argmax(y)]
-    sigma1 = (x[1]-x[0])/5
-    sigma2 = sigma1*10
     
-    return(A1, mu, sigma1, A2, mu, sigma2)
+    A1 = max(y)
+    A2 = max(y)
+    ycs = np.cumsum(y) / np.sum(y)
+    mu1, mu2, b1l, b1u, b2l, b2u = np.interp([.25, .75, .17, .33, .67, .83], ycs, x)
+    
+    sigma1 = b1u-b1l
+    sigma2 = b2u-b2l
+
+    
+    return(A1, mu1, sigma1, A2, mu2, sigma2)
     
     
 gauss2 = fit_function(
     f = gaus2,
     f_p0 = f_p0_gaus2,
     description = "sum of two gaus functions without a constant term",
+    short_description  = "double gauss",
     parameters = ["A1", "mu1", "sigma1", "A2", "mu2", "sigma2"],
     parameters_tex = ["A_1", "\\mu_1", "\\sigma_1", "A_2", "\\mu_2", "\\sigma_2"],
     formula = "A1 exp(-(x-mu1)^2 /(2 sigma1)^2) + A2 exp(-(x-mu2)^2 /(2 sigma2)^2)",
@@ -317,3 +423,26 @@ expdecay_to = fit_function(
     formula = "A/(1+ exp((t_0 - t)/a)) np.exp((t_0-t)/tau)",
     formula_tex = "$\\frac{{A exp((t_0-t)/\\tau)}}{{(1 + \\exp((t_0 - t)/a))}} $",
 )
+
+# normal distributiuon
+def f_normal(x, mu = 0, sigma = 1):
+    return(
+        1/(sigma*(2*np.pi)**.5)*np.exp(-1/2 * ((x-mu)/(sigma))**2)
+    )
+def f_p0_normal(x, y):
+    return([
+        x[np.argmax(y)],
+        (np.diff(np.interp([.16, .84], np.cumsum(y), x))/2)[0],
+    ])
+    
+normal = fit_function(
+    f = f_normal,
+    f_p0 = f_p0_normal,
+    description = "normal distribution (normalized gauss distribution)",
+    short_description = "normal distribution",
+    parameters = ["mu", "sigma"],
+    parameters_tex = ["\\mu", "\\sigma"],
+    formula = "1/(σ √(2 π)) gauss(x;µ,σ)",
+    formula_tex = "$\\frac{1}{\\sigma \\sqrt{{2 \\pi}}} \\exp{{-\\frac{{x-\\mu}}{{2\\sigma}}^2}}$",
+)
+    

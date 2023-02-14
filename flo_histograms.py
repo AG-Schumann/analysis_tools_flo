@@ -29,6 +29,7 @@ def make_folder(path, msg_on_exist = False):
     return(None)
 
 
+
 def get_path(folder_name):
     f'''
     creates a folder in {default_folder_out}/
@@ -37,11 +38,38 @@ def get_path(folder_name):
     path = f"{default_folder_out}/{folder_name}"
     make_folder(path)
     return(path)
+    
 
 
+def save_axs_individuially(axs, basename, fig = False, expand = True):
+    axs_ = axs.reshape(-1)
+    if fig is False:
+        fig = axs_[0].get_figure()
+    
+    # turning all axis off to bot bleed into other plots
+    axs_on = [ax.axison for ax in axs_]
+    for ax in axs_:
+        ax.set_axis_off()
+        
+    
+    if expand is True:
+        expand = (1.3, 1.4)
+    for i_ax, ax in enumerate(axs_):
+        ax.set_axis_on()
+        title = ax.get_title()
+        
+        extent = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+        if expand is not False:
+            extent = extent.expanded(1.3, 1.4)
+        fig.savefig(f'{basename}_{i_ax}_{title}.png', bbox_inches=extent)
+        ax.set_axis_off()
+        
+    
+    for ax, ax_on in zip(axs_, axs_on):
+        if ax_on is True:
+            ax.set_axis_on()
 
-
-def range(x, thr = 0):
+def calc_range(x, thr = 0):
     x_ = np.array(x)
     if thr is not False:
         x_ = x_[x_ > thr]
@@ -57,10 +85,10 @@ def range(x, thr = 0):
 
 try:
     from IPython.display import clear_output
-    def clear():
+    def clear(*args, **kwargs):
         clear_output(True)
 except:
-    def clear():
+    def clear(*args, **kwargs):
         pass
 
 # Info on Krypton:
@@ -167,11 +195,6 @@ def ax(**kwargs):
     fig, ax = make_fig(**{"rax": False, **kwargs})
     return(ax)
 
-def addlabel(ax, label, color = "black", linestyle = "", marker = "", *args, **kwargs):
-    ax.plot([], [], label = label, color = color, linestyle=linestyle, marker=marker, *args, **kwargs)
-
-
-
 def errorbar(
     ax, x, y, sy,
     color = None, capsize = 5,
@@ -196,81 +219,7 @@ def errorbar(
     
 
 
-def get_nice_format(*x):
-    '''
-    returns ONE fmt string for all numbers to make them look the same
-    '''
-    y = np.array(x).reshape(-1)
-    y = np.array(np.abs(y[y != None]), dtype = float)
-    log_y = np.log10(y)
-    
-    decis = np.array([np.ceil(max(log_y)), np.floor(min(log_y)-1)])
-    
-    
-    if decis[0] - decis[1] <= 10:
-        
-        # ignore difference, they are in the same leauge
-        if decis[1] < 0:
-            return(f".{-decis[1]:.0f}f")
-        if decis[1] < 3:
-            # default case 
-            return(f".1f")
-        if decis[1] < 5:
-            # default case 
-            return(f".0f")
-        return(f".2e")
-    
-    # large difference or large numbers, use dynamic mode 
-    return(".3g")
-    
 
-
-
-def add_fit_parameter(ax, l, p, sp=None, u="", fmt="auto"):
-    '''
-    adds nicely formated fit results to legend
-    
-    l: label
-    p: parameter
-    sp: uncertainty
-    u: unit
-    fmt: format (auto: use get_nice_format)
-    
-    '''
-    
-    if fmt == "auto":
-        fmt = get_nice_format(p, sp)
-    
-    brackets = False
-    if sp is None:
-        str_ = f"{p:{fmt}}"
-    else:
-        brackets = True
-        if (sp < 100 * p) or (sp < 100):
-            str_ = f"{p:{fmt}} \\pm {sp:{fmt}}"
-        else:
-            str_ = f"{p:{fmt}} \\pm {sp:.2e}"
-    
-    
-
-    if brackets and (u != ""):
-        str_ = f"({str_})"
-    
-        
-    
-    str_ = f"${l} = {str_}$"
-    if (u != ""):
-        str_ = f"{str_} {u}"
-    
-    addlabel(ax, str_)
-    
-    return(None)
-
-def add_fit_parameters(ax, pars, fit, sfit, units = False, **kwargs):
-    if units is False:
-        units = [""]*len(pars)
-    for par, v, sv, u in zip(pars, fit, sfit, units):
-        add_fit_parameter(ax, par, v, sv, u, **kwargs)
 
 
 
@@ -414,6 +363,17 @@ parameters:
     return(out)
 
 
+def sliding(*x, f = False, ext = 1):
+    if f is False:
+        def f(*args):
+            return(args)
+            
+    x_ = np.array(x).T
+    
+    return(
+        [f(x_[np.arange(max(0, i-ext), min(len(x_), i+ext+1))].T) for i in np.arange(len(x_))]
+    )
+
 
 def median(x, percentile = 68.2, clean = True, ax=False, *args, **kwargs):
     x_ = np.array(x)*1
@@ -553,44 +513,6 @@ def s_pois(counts, rng = .682, return_range = False):
     
     return(counts_ - low, high - counts_)
     
-
-def chi_sqr(f, x, y, s_y, *pars, ndf = False, ignore_zeros = False, **kwargs):
-    '''
-    returns a tuple with chi^2, ndf and reduced chi^2
-    
-    parameters:
-    
-    f: the fucntion that was fitted
-    x, y: x and y values of the data
-    s_y: the uncertainties of the data
-    (can be two arrays for lower and upper encertainties)
-    
-    
-    
-    '''
-    x = np.array(x)
-    y = np.array(y)
-    s_y = np.array(s_y)
-    y_f = f(x, *pars)
-    
-    
-    
-    if len(np.shape(s_y)) == 2:
-        s_y = s_y[0]*(y_f < y)+s_y[1]*(y_f >= y)
-    if ignore_zeros is True:
-        y, s_y, x, y_f = remove_zero(y, s_y, x, y_f)
-    if ndf is False:
-        ndf = len(x) - len(pars)
-    
-    
-    chi = float(np.sum(((y - y_f)/s_y)**2))
-    
-    return(
-        (chi, ndf, chi/ndf,
-            f"reduced chi² = {chi:.1f}/{ndf:.0f} = {chi/ndf:.1f}",
-            f"$\\chi^2_\\mathrm{{red}} = {chi:.1f}/{ndf:.0f} = {chi/ndf:.1f}$"
-        )
-    )
 
 
 def binning(x, y, bins, label="bc"):
@@ -1066,8 +988,52 @@ def remove_zero(x, *args):
     else:
         return(x)
 
-def fit_gaus(x, y, absolute_sigma = True, sigma = None, meta = False, **kwargs):
 
+
+def fit_gauss(bc, c, sc = None, label = "", ax = False, norm_plot = False, f = ff.gauss, draw_p0 = False, return_dict = False, color = None, **kwargs):
+    # better fucntion than fit_gaus
+    p0 = f.p0(bc, c)
+    if sc is None:
+        sc = s_pois(c)[1]
+    fit, cov = scipy.optimize.curve_fit(
+        f,
+        bc, c,
+        sigma = sc,
+        absolute_sigma=True,
+        p0 = p0
+    )
+
+    
+    sfit = np.diag(cov)**.5
+    chi2 = chi_sqr(f, bc, c, sc, *fit)
+
+    
+    if isinstance(ax, plt.Axes):
+        xp = np.linspace(bc[0], bc[-1], 1000)
+        yf = f(xp, *fit)
+        if draw_p0 is True:
+            y0 = f(xp, *p0)
+            ax.plot(xp, y0, alpha = .5,  color = color)
+        
+        
+        if norm_plot is True:
+            yf = yf/np.sum(c)
+        ax.plot(xp, yf, color = color)        
+        add_fit_parameters(ax, f, fit, sfit)
+        
+    if return_dict is True:
+        out = {f"{label}chi2": chi2[2]}
+        for par, v, sv  in zip(f.parameters, fit, sfit):
+            out[f"{label}{par}"] = v
+            out[f"s{label}{par}"] = sv
+        
+        return(out)
+    else:
+        return(fit, sfit, chi2)
+
+
+def fit_gaus(x, y, absolute_sigma = True, sigma = None, meta = False, **kwargs):
+    print("\33[31myou might want to use fit_gauss instead of fit_gaus\33[0m")
     x = np.array(x)
     y = np.array(y)
     
