@@ -14,6 +14,7 @@ from threading import Thread, Event
 
 # my packages
 from default_bins import *
+from flo_fancy import *
 import flo_functions as ff
 
 
@@ -197,10 +198,12 @@ def ax(**kwargs):
 
 def errorbar(
     ax, x, y, sy,
+    ax2 = False,
     color = None, capsize = 5,
     linestyle = "", label = "",
     marker = "", plot = False,
     slimit = False,
+    
     *args, **kwargs):
     
     if plot is True:
@@ -212,7 +215,10 @@ def errorbar(
         label = None
     
     if slimit is not False:
-        _, x, y, sy = remove_zero(np.abs(sy) < slimit, x, y, sy)
+        if isinstance(ax2, plt.Axes):
+            ax2.errorbar(x, y, yerr = sy, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
+            
+        _, x, y, sy = remove_zero(np.abs(sy) < np.abs(slimit), x, y, sy)
     
     ax.errorbar(x, y, yerr = sy, label = label, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
 

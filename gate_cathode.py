@@ -19,9 +19,8 @@ from datetime import datetime
 
 # NEW METHOD FOR GETTINGF Gate and Cathode
 gc_info = {
-   "gate": (ff.sigmoid_lin, "lower right", "S1 area", "PE", "gate"),
-   "cath": (ff.sigmoid, "upper right", "counts", "", "cathode"),
-    
+   "gate": (ff.erf_lin, "lower right", "S1 area", "PE", "gate"),
+   "cath": (ff.erf, "upper right", "counts", "", "cathode"),
 }
 gc_units_all = {
     "mu": "µs",
@@ -80,8 +79,6 @@ def gc_get_unit(p, unit_dict, unit = ""):
 
 
 
-# fig, axs = fhist.make_fig(1, 2)
-
 def find_cathode_and_gate(
     ds,
     N_bin_shifts = 4,
@@ -132,7 +129,7 @@ def find_cathode_and_gate(
                     p0 = p0
                 )
                 sfit = np.diag(cov)**.5
-                chi2 = fhist.chi_sqr(f, x, y, sy, *fit)
+                chi2 = chi_sqr(f, x, y, sy, *fit)
                 out = {
                     "what": what,
                     "iteration": iteration,
@@ -169,11 +166,8 @@ def find_cathode_and_gate(
                     figs_path_iter = figs_path.replace("%WHAT%", what).replace("%ITER%", f"{iteration:0>{fmt_i}}")
 
                     ax = fhist.ax()
-
-                    if title != "":
-                        title = f"{title} "
-                        
-                    ax.set_title(f"{what_title} {title}(i = {iteration})")
+  
+                    ax.set_title(f"{what_title} {title} (i = {iteration})")
                     color = ax.plot(x, y, ".", label = "data")[0].get_color()
                     fhist.errorbar(ax, x, y, sy, color = color)
                     fhist.errorbar(ax, x, y, spr, color = color, alpha = .2)
@@ -184,14 +178,14 @@ def find_cathode_and_gate(
 
                     yf = f(xp, *fit)
                     ax.plot(xp, yf, label = f"fit {chi2[4]}")
-                    fhist.add_fit_parameters(ax, f, fit, sfit, units)
+                    add_fit_parameters(ax, f, fit, sfit, units)
                     ax.set_xlabel(f"drift time / µs")
                     ax.set_ylabel(string_join(f"{label}", unit, sep = " / "))
                     ax.legend(loc = loc)
                     plt.savefig(figs_path_iter)
                     plt.close()
             except Exception as e:
-                print(f"\33[31mfailed\33[0m: {e}")
+                print(f"\33[31mfailed indiv.\33[0m: {e}")
                 pass
         df_indiv = df_indiv.append(df_what)
 
@@ -216,23 +210,27 @@ def find_cathode_and_gate(
 
 
                 if (figs_path is not False) and isinstance(figs_path, str):
-                    ax = fhist.ax()
+                    ax2 = fhist.ax()
+                    ax = ax.twinx()
+                    ax.set_axis_off()
                     figs_path_param = figs_path.replace("%WHAT%", what).replace("%ITER%", f"summmary_{par}")
-                    ax.set_title(f"{title}{what} ${par_tex}$")
-                    ax.set_xlabel("$\\chi^2_\\mathrm{{red}}$")
+                    ax2.set_title(f"{title}{what} ${par_tex}$")
+                    ax2.set_xlabel("$\\chi^2_\\mathrm{{red}}$")
 
-                    ax.set_ylabel(string_join(f"${par_tex}$", unit, sep = " / "))
-                    fhist.errorbar(ax, x, y, sy, plot = True, label = f"${par_tex}$", slimit=np.median(sy)*5)
+                    ax2.set_ylabel(string_join(f"${par_tex}$", unit, sep = " / "))
+                    fhist.errorbar(ax2, x, y, sy, plot = True, label = f"${par_tex}$", slimit=sv*10, ax2 = ax)
 
-                    fmt = fhist.get_nice_format(v, sv)
-                    ax.axhline(v, label = f"mean: ({v:{fmt}}±{sv:{fmt}}) {unit}")
-                    ax.axhspan(v-sv, v+sv, alpha = .25)
+                    fmt = get_nice_format(v, sv)
+                    ax2.axhline(v, label = f"mean: ({v:{fmt}}±{sv:{fmt}}) {unit}")
+                    ax2.axhspan(v-sv, v+sv, alpha = .25)
 
-                    ax.legend(loc = "upper right", fontsize = 8)
+                    ax2.legend(loc = "upper right", fontsize = 8)
+                    
+                    ax.set_ylim(ax2.get_ylim())
                     plt.savefig(figs_path_param)
                     plt.close()
         except Exception as e:
-            print(f"\33[31mfailed\33[0m: {e}")
+            print(f"\33[31mfailed summary\33[0m: {e}")
             pass
         out_summary = {**out_summary, **append_dict}
         df_summary = df_summary.append(out_summary, ignore_index = True)

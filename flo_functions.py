@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import inspect
 from flo_fancy import *
 from scipy.optimize import curve_fit
+import scipy
 
 
 def get_default_args(func):
@@ -31,8 +32,10 @@ class fit_function:
         
         
         if parameters is None:
-            raise ValueError("parmaters for fucntion not given! use ")
+            raise ValueError("parmaters for function not given! use ")
         self.parameters = parameters
+        self.plen = max([len(p) for p in parameters])
+        
         if parameters_tex is None:
             self.parameters_tex = parameters
         else:
@@ -60,7 +63,7 @@ class fit_function:
 
 
 
-def fit(f, x, y, sigma = None, ax = False, units = None, color = None, kwargs_curvefit = None, kwargs_plot = None):
+def fit(f, x, y, sigma = None, p0 = True, ax = False, units = None, color = None, verbose = False, label = "fit: ", show_gof = True, kwargs_curvefit = None, kwargs_plot = None):
     
     
     if not isinstance(f, fit_function):
@@ -70,28 +73,49 @@ def fit(f, x, y, sigma = None, ax = False, units = None, color = None, kwargs_cu
             kwargs_curvefit = {}
         if not isinstance(kwargs_plot, dict):
             kwargs_plot = {}
-        p0 = f.p0(x, y)
+        
+        if p0 is True:
+            p0 = np.array(f.p0(x, y))
+        elif p0 is False:
+            p0 = None
+        
+        for i in range(2):
+            fit, cov, *output = curve_fit(
+                f.f, 
+                x, y,
+                sigma=sigma,
+                absolute_sigma=True,
+                p0 = p0,
+                full_output = True,
+                **kwargs_curvefit
+            )
+            # sometimes good starting parameters yield infinite covariance matrix..... urgh
+            sfit = np.diag(cov)**.5
+            if verbose is True:
+                nev = output[0]["nfev"]
+                print(f"fit {i+1} ({nev} iterations)")
+                for p, v, sv in zip(f.parameters, fit, sfit):
+                    print(f"{p:>{f.plen}}: {v:12.4g} ±{sv:12.4g}")
+            
+            if np.inf not in cov:
+                break
+            elif i == 0:
+                print("\33[31mWarning: found infinite covariance matrix, fitting again with p0 = fit + .1\33[0m")
+                p0 = fit + .1
 
-        fit, cov = curve_fit(
-            f.f, 
-            x, y,
-            sigma=sigma,
-            absolute_sigma=True,
-            p0 = p0,
-            **kwargs_curvefit
-        )
-
-        sfit = np.diag(cov)**.5
+        
         if sigma is not None:
             chi2 = chi_sqr(f, x, y, sigma, *fit)
             chi_str = f" {chi2[4]}"
         else:
-            chi2 = False
-            chi_str = f""
+            chi2 = res_sqr(f, x, y, *fit)
+            chi_str = f" {chi2[4]}"
+        if show_gof is False:
+            chi_str = ""
         if isinstance(ax, plt.Axes):
             xp = np.linspace(min(x), max(x), 1000)
             yf = f(xp, *fit)
-            color = ax.plot(xp, yf, label = f"fit{chi_str}", color = color, **kwargs_plot)[0].get_color()
+            color = ax.plot(xp, yf, label = f"{label}{chi_str}", color = color, **kwargs_plot)[0].get_color()
 
             if units is None:
                 units = [""]*len(f)
@@ -196,6 +220,76 @@ An exponential decay that coverges to zero
 usage: y = exp_decayC(x; A, tau)
 '''
 )
+
+
+# errofunctions
+def f_erf(x, mu, sigma, y0, y1):
+    return(
+        y0 +((scipy.special.erf((x-mu)/sigma/2)+1)/2) * (y1-y0)
+    )
+def f_p0_erf(x, y):
+    x_, y_ = clean(x, y)
+    x_, y_ = sort(x_, y_)
+    n = len(y)
+    y0 = np.mean(y_[:int(n/5)])
+    y1 = np.mean(y_[int(n/5*4):])
+    dy = y1-y0
+    y2_ = (y_ - y0)/dy
+
+    mu, s0, s1 = np.interp([0.5, .16, .84], y2_, x_)
+    sigma = (s1-s0)*(np.pi*2)**-.5
+
+    p0 = np.array([mu, sigma, y0, y1])
+
+    return(p0)
+
+
+erf = fit_function(
+    f = f_erf,
+    f_p0 = f_p0_erf,
+    description = "erro function",
+    parameters = ["mu", "sigma", "y0", "y1"],
+    parameters_tex = ["\\mu", "\\sigma", "y_{{0}}", "y_{{1}}"],
+    formula = "erf(x; mu, sigma, y0, y1)",
+    formula_tex = "$\\erf(x; \\mu, \\sigma, y_{{0}}, y_{{1}})$",
+    docstring = '''
+    an error function implementation
+'''
+)
+def f_erf_lin(x, mu, sigma, y0, y1, a):
+    return(
+        (y0 +((scipy.special.erf((x-mu)/sigma/2)+1)/2) * (y1-y0)) * (a*x + 1)
+    )
+def f_p0_erf_lin(x, y):
+    x_, y_ = clean(x, y)
+    x_, y_ = sort(x_, y_)
+    n = len(y)
+    y0 = np.mean(y_[:int(n/5)])
+    y1 = np.mean(y_[int(n/5*4):])
+    dy = y1-y0
+    y2_ = (y_ - y0)/dy
+
+    mu, s0, s1 = np.interp([0.5, .16, .84], y2_, x_)
+    sigma = (s1-s0)*(np.pi*2)**-.5
+
+    p0 = np.array([mu, sigma, y0, y1, 0])
+
+    return(p0)
+
+
+erf_lin = fit_function(
+    f = f_erf_lin,
+    f_p0 = f_p0_erf_lin,
+    description = "erro function multiplied by (a*x + 1)",
+    parameters = ["mu", "sigma", "y0", "y1", "a"],
+    parameters_tex = ["\\mu", "\\sigma", "y_{{0}}", "y_{{1}}", "a"],
+    formula = "erf(x; mu, sigma, y0, y1,)*(a*x + 1)",
+    formula_tex = "$\\erf(x; \\mu, \\sigma, y_{{0}}, y_{{1}}) (a x + 1)$",
+    docstring = '''
+    an error function
+'''
+)
+
 
 
 # sigmoid function
