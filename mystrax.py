@@ -8,6 +8,7 @@ import flo_decorators
 from threading import Thread, Event
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import mystrax_corrections as msc
 
 def now():
     return(datetime.now())
@@ -44,6 +45,11 @@ context_sp = straxbra.SinglePhaseContext()
 context_dp = straxbra.XebraContext()
 db = straxbra.utils.db
 
+# database collections
+mycol = db["calibration_info"]
+corr_coll = db["correction_info"]
+
+
 
 labels = {
     "event_fits": np.array(["first S1", "second S1", "first S2", "second S2"]),
@@ -52,6 +58,12 @@ labels = {
     
 }
 
+
+
+
+corrections = {
+    "gate_cathode": msc.correct_drifttime,
+}
 
 
 
@@ -318,6 +330,53 @@ def find_config(target = ""):
     return(config)
 
 
+
+def get_correction_for(typ = False, start = False, *_, limit = 1, v = False):
+    '''
+    returns correcions for types various types:
+        get the types by calling this funciotn witout an argument
+        
+    parameters: 
+        * typ: type of correction see above
+        * start (now()): time of run, correction must be older than this
+        * limit (1): how many entries to return
+        * v (False): 'verbose', prints query parameters
+        
+    '''
+    valid_types = ["gate_cathode",]
+    
+    if typ is True:
+        print(f"valid types: {valid_types}")
+    if typ is True or typ is False:
+        return(valid_types)
+    
+    if typ not in valid_types:
+        raise TypeError(f"typ must be in ({valid_types})")
+
+    if start is False:
+        start = datetime.now()
+
+    
+    if v is True:
+        print(f"call: typ: {typ}, start: {start}, limit: {limit}")
+            
+            
+    correction = list(corr_coll.find(
+        {
+            "type": typ,
+            "date": {"$lt": start},
+
+        },
+        sort = [('_id', -1)],
+        limit = limit,
+    ))
+    if (limit == 1) and len(correction) == 1:
+        correction = correction[0]
+    return(correction)
+
+
+
+
 def check(runs, target, context = False, config = False, cast_int = True, v = True):
     
     if context is False:
@@ -338,7 +397,10 @@ def check(runs, target, context = False, config = False, cast_int = True, v = Tr
 
 
 
-def load(runs, target, context = False, config = False, check_load = True, v = True, **kwargs):
+
+
+
+def load(runs, target, context = False, config = False, check_load = True, v = True, correct = True, filters = True, **kwargs):
     '''
     loads data if availabe
     
@@ -359,7 +421,8 @@ def load(runs, target, context = False, config = False, check_load = True, v = T
             default True
         v: verbose toggle, prints messages
             default True
-            
+        filters (True): if True: looks for fields like OK and clean and returns only fields where these fields are True
+                if list of strings: uses list entires and checks them
     check_load
     
     '''
@@ -389,7 +452,54 @@ def load(runs, target, context = False, config = False, check_load = True, v = T
     data =  context.get_array(runs, target, config = config, **kwargs)
     t1 = now()
     if v is True: print(f"    data loaded: {len(data)} entries for {len(runs)} runs in {t1-t0}")
+    
+    if filters is True:
+        filters = ["OK", "clean"]
+
+        
+    dtype_names = data.dtype.names
+    if isinstance(filters, list):
+        filters = [f for f in filters if (isinstance(f, str) and f in dtype_names)]
+        if v is True: qp(f"filtering: ")
+        for filter_i in filters:
+            if v is True: qp(f"{len(data)} -(\33[1m{tcol}{filter_i}\33[0m)-> ")
+            data = data[data[filter_i] == True]
+        if v is True: print(f"{len(data)}")
+        
+    
+    run_ids = list(map(int, runs))
+    if correct is True:
+        correct = get_correction_for()
+    if (target[-8:] == "_summary") and isinstance(correct, list):
+        print("correcting")
+        runs_info = list(db.runs.find({
+            "experiment": context.config["experiment"],
+            "run_id": {"$in": run_ids}
+        }))
+        runs_info = {x["run_id"]:x for x in runs_info}
+
+        for run_id in run_ids:
+            if len(run_ids) == 1:
+                bool_run = np.ones(len(data))
+            else:
+                bool_run = data["run_id"] == run_id
+
+            data_run = data[bool_run]
+            start_run = runs_info[run_id]["start"]
+            qp(f"  * {run_id} ({start_run.strftime('%H:%M:%S %d.%m.%Y')}):")
+            for corection_type in correct:
+                qp(f" {corection_type}")
+                corr = get_correction_for(corection_type, start_run)
+                info = corr["info"]
+                corrections[corection_type](data, info, bool_run)
+            print()
+        
     return(data)
+
+
+
+
+
 
 c = {
     "s":context_sp,
@@ -533,7 +643,9 @@ print(f"{tcol}Import done at {datetime.now()}\33[0m")
 
 
 
-mycol = db["calibration_info"]
+
+
+
 
 def db_dict():
     return(

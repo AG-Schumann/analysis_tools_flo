@@ -70,7 +70,7 @@ def save_axs_individuially(axs, basename, fig = False, expand = True):
         if ax_on is True:
             ax.set_axis_on()
 
-def calc_range(x, thr = 0):
+def calc_range(x, thr = False):
     x_ = np.array(x)
     if thr is not False:
         x_ = x_[x_ > thr]
@@ -215,6 +215,8 @@ def errorbar(
         label = None
     
     if slimit is not False:
+        if slimit is True:
+            slimit = 10 * np.median(clean(sy))
         if isinstance(ax2, plt.Axes):
             ax2.errorbar(x, y, yerr = sy, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
             

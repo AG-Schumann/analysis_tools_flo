@@ -225,7 +225,7 @@ usage: y = exp_decayC(x; A, tau)
 # errofunctions
 def f_erf(x, mu, sigma, y0, y1):
     return(
-        y0 +((scipy.special.erf((x-mu)/sigma/2)+1)/2) * (y1-y0)
+        y0 +((scipy.special.erf((x-mu)/sigma/(2**.5))+1)/2) * (y1-y0)
     )
 def f_p0_erf(x, y):
     x_, y_ = clean(x, y)
@@ -391,7 +391,7 @@ usage: y = sigmoid(x; mu, sigma, y1, y0, a)
 # gauss function
 def f_gauss(x, A=1, mu=0, sigma=1):
     return(
-        A * np.exp(-(np.array(x)-mu)**2 / (2*sigma)**2)
+        A * np.exp(-(np.array(x)-mu)**2 / (2* sigma**2))
     )
 def f_p0_gauss(x, y):
     A = max(y)
@@ -418,8 +418,8 @@ gauss = fit_function(
 # doublegauss function
 def gaus2(x, A1=1, mu1=0, sigma1=1, A2=1, mu2=0, sigma2=1):
     return(
-          A1 * np.exp(-(np.array(x)-mu1)**2 / (2*sigma1)**2)
-        + A2 * np.exp(-(np.array(x)-mu2)**2 / (2*sigma2)**2)
+          A1 * np.exp(-(np.array(x)-mu1)**2 / (2*sigma1**2))
+        + A2 * np.exp(-(np.array(x)-mu2)**2 / (2*sigma2**2))
     )
 def f_p0_gaus2(x, y):
     
@@ -442,14 +442,14 @@ gauss2 = fit_function(
     short_description  = "double gauss",
     parameters = ["A1", "mu1", "sigma1", "A2", "mu2", "sigma2"],
     parameters_tex = ["A_1", "\\mu_1", "\\sigma_1", "A_2", "\\mu_2", "\\sigma_2"],
-    formula = "A1 exp(-(x-mu1)^2 /(2 sigma1)^2) + A2 exp(-(x-mu2)^2 /(2 sigma2)^2)",
-    formula_tex = "$A_1 \\exp{{\\frac{{-(x-\\mu_1)^2}}{{(2 \\sigma_1)^2}}}} + A_2 \\exp{{\\frac{{-(x-\\mu_2)^2}}{{(2 \\sigma_2)^2}}}}$",
+    formula = "A1 exp(-(x-mu1)^2 /(2 sigma_1^2)) + A2 exp(-(x-mu2)^2 /(2 sigma_2^2))",
+    formula_tex = "$A_1 \\exp{{\\frac{{-(x-\\mu_1)^2}}{{(2 \\sigma_1^2)}}}} + A_2 \\exp{{\\frac{{-(x-\\mu_2)^2}}{{(2 \\sigma_2^22}}}}$",
 )
 
 # gauss function
 def gaussC(x, A=1, mu=0, sigma=1, C = 0):
     return(
-        A * np.exp(-(np.array(x)-mu)**2 / (2*sigma)**2) + C
+        A * np.exp(-(np.array(x)-mu)**2 / (2*sigma**2)) + C
     )
 def f_p0_gaussC(x, y):
     return(max(y), x[np.argmax(y)], (x[1]-x[0])/5, 0)
@@ -462,7 +462,7 @@ gaussC = fit_function(
     parameters = ["A", "mu", "sigma", "C"],
     parameters_tex = ["A", "\\mu", "\\sigma", "C"],
     formula = "A exp(-(x-mu)^2 /(2 sigma)^2)+C",
-    formula_tex = "$A \\exp{{\\frac{{-(x-\\mu)^2}}{{(2 \\sigma)^2}}}}+C$",
+    formula_tex = "$A \\exp{{\\frac{{-(x-\\mu)^2}}{{(2 \\sigma^2)}}}}+C$",
 )
 
 
@@ -470,7 +470,7 @@ gaussC = fit_function(
 # gauss function
 def f_expgauss(x, A, tau, C=0, B=1, mu=0, sigma=1):
     return(
-        A*np.exp(-x/tau) + B * np.exp(-(np.array(x)-mu)**2 / (2*sigma)**2) + C
+        A*np.exp(-x/tau) + B * np.exp(-(np.array(x)-mu)**2 / (2*sigma**2)) + C
     )
 
 def f_p0_expgauss(x, y, tau_lit = 1, mu_lit = 1600, sigma_lit = 100):
@@ -492,7 +492,7 @@ expgauss = fit_function(
     parameters = ["A", "tau", "C", "B", "mu", "sigma"],
     parameters_tex = ["A", "\\tau", "C", "B", "\\mu", "\\sigma"],
     formula = "A exp(t / tau) + B exp(-(t-mu)^2 /(2 sigma)^2) + C",
-    formula_tex = "$A \\cdot \\exp{{( t / \\tau)}} + B \\exp{{\\frac{{-(t-\\mu)^2}}{{(2 \\sigma)^2}}}} + C$",
+    formula_tex = "$A \\cdot \\exp{{( t / \\tau)}} + B \\exp{{\\frac{{-(t-\\mu)^2}}{{(2 \\sigma^2)}}}} + C$",
 )
 
 

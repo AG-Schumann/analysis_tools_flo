@@ -21,6 +21,7 @@ from datetime import datetime
 gc_info = {
    "gate": (ff.erf_lin, "lower right", "S1 area", "PE", "gate"),
    "cath": (ff.erf, "upper right", "counts", "", "cathode"),
+   "gate_ratio": (ff.erf_lin, "upper right", "S2/S1 area", "", "gate"),
 }
 gc_units_all = {
     "mu": "µs",
@@ -33,10 +34,13 @@ gc_units_all = {
 
 
 def gc_get_xydata(ds, what, bins):
-    dat = fhist.binning(ds["drifttime"], ds["areas"][:, 6], bins = bins)
+    if what == "gate_ratio":
+        dat = fhist.binning(ds["drifttime"], ds["areas"][:, 7]/ds["areas"][:, 6], bins = bins)
+    else:
+        dat = fhist.binning(ds["drifttime"], ds["areas"][:, 6], bins = bins)
     
     medians = pd.DataFrame(columns=['bc', 'mu', 'smu', "spr"])
-    if what == "gate":
+    if what[:4] == "gate":
         for bc, data in dat.items():
             if len(data) > 0:
                 try:
@@ -84,9 +88,18 @@ def find_cathode_and_gate(
     N_bin_shifts = 4,
     figs_path = False,
     title = "",
-    append_dict = None
+    append_dict = None,
+    what_todo = True,
 ):
-
+    if what_todo is True:
+        what_todo = ["gate", "cath"]
+    
+    if isinstance(what_todo, str):
+        what_todo = [what_todo]
+    
+    if not isinstance(what_todo, (list, np.ndarray)):
+        raise ValueError("what_todo must be list, str or numpy.array")
+    
     if not isinstance(append_dict, dict):
         append_dict = dict()
 
@@ -95,12 +108,12 @@ def find_cathode_and_gate(
     df_summary = pd.DataFrame()
 
 
-    for i_what, what in enumerate(["gate", "cath"]):
+    for i_what, what in enumerate(what_todo):
         df_what = pd.DataFrame()
         print(what)
         f, loc, label, unit, what_title = gc_info[what]
         units = [gc_get_unit(p, gc_units_all, unit) for p in f.parameters]
-        bins = default_bins[f"find_{what}"]
+        bins = default_bins[f"find_{what[:4]}"]
         bw = np.diff(bins)[0]
         bin_offset_each = bw / N_bin_shifts
 
@@ -165,25 +178,31 @@ def find_cathode_and_gate(
 
                     figs_path_iter = figs_path.replace("%WHAT%", what).replace("%ITER%", f"{iteration:0>{fmt_i}}")
 
-                    ax = fhist.ax()
-  
-                    ax.set_title(f"{what_title} {title} (i = {iteration})")
-                    color = ax.plot(x, y, ".", label = "data")[0].get_color()
-                    fhist.errorbar(ax, x, y, sy, color = color)
-                    fhist.errorbar(ax, x, y, spr, color = color, alpha = .2)
+                    ax2 = fhist.ax()
+                    ax = ax2.twinx()
+                    ax2.set_title(f"{what_title} {title} (i = {iteration})")
+                    color = ax2.plot(x, y, ".", label = "data")[0].get_color()
+                    
+                    
+                    fhist.errorbar(ax2, x, y, sy, color = color, ax2 = ax, slimit = True)
+                    fhist.errorbar(ax2, x, y, spr,color = color, ax2 = ax, slimit = True, alpha = .2, )
                     xp = np.linspace(min(bins), max(bins), 1000)
 
                 #     y0 = f(xp, *p0)
                 #     ax.plot(xp, y0, label = "p0")
 
                     yf = f(xp, *fit)
-                    ax.plot(xp, yf, label = f"fit {chi2[4]}")
-                    add_fit_parameters(ax, f, fit, sfit, units)
-                    ax.set_xlabel(f"drift time / µs")
-                    ax.set_ylabel(string_join(f"{label}", unit, sep = " / "))
-                    ax.legend(loc = loc)
+                    ax2.plot(xp, yf, label = f"fit {chi2[4]}")
+                    add_fit_parameters(ax2, f, fit, sfit, units)
+                    ax2.set_xlabel(f"drift time / µs")
+                    ax2.set_ylabel(string_join(f"{label}", unit, sep = " / "))
+                    ax2.legend(loc = loc)
+                    
+                    ax.set_axis_off()
+                    ax.set_ylim(ax2.get_ylim())
                     plt.savefig(figs_path_iter)
                     plt.close()
+                    
             except Exception as e:
                 print(f"\33[31mfailed indiv.\33[0m: {e}")
                 pass
@@ -196,9 +215,11 @@ def find_cathode_and_gate(
             "parameters": f.parameters,
         }
         
+        
+        strs_results = ""
         try:
             x = df_what["chi2"].values
-
+            
 
             for par, par_tex, unit in zip(f.parameters, f.parameters_tex, units):
                 y = df_what[f"result_{par}"].values
@@ -229,9 +250,25 @@ def find_cathode_and_gate(
                     ax.set_ylim(ax2.get_ylim())
                     plt.savefig(figs_path_param)
                     plt.close()
+                    
+            mu, smu = out_summary[f"result_mu"], out_summary[f"result_smu"]
+            sigma, ssigma = out_summary[f"result_sigma"], out_summary[f"result_ssigma"]
+            
+            strs_results  = f"µ:({v_str(mu)} +- {v_str(smu)}) µs, "
+            strs_results += f"σ:({v_str(sigma)} +- {v_str(ssigma)}) µs"
+            strs_results += "\33[0m"
+                    
         except Exception as e:
             print(f"\33[31mfailed summary\33[0m: {e}")
             pass
+            
+        
+        
+        
+        qp(f" \33[1m\33[35m{'MEAN':>{2*fmt_i+3}} ")
+        print(strs_results)
+
+        
         out_summary = {**out_summary, **append_dict}
         df_summary = df_summary.append(out_summary, ignore_index = True)
 
