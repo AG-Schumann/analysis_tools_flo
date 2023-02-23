@@ -1,6 +1,7 @@
 import os
 import sys
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import scipy.stats
@@ -224,7 +225,7 @@ def errorbar(
     
     ax.errorbar(x, y, yerr = sy, label = label, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
 
-    
+    return(color)
 
 
 
@@ -550,6 +551,27 @@ def binning(x, y, bins, label="bc"):
 
 
 
+def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=5):
+    binned_data = binning(x, y, bins)
+    
+    df = pd.DataFrame()
+    
+    
+    for bc, values in binned_data.items():
+        N = len(values)
+
+        if N >= n_counts_min:
+            md, spr, smd = f_median(values)
+            res = {
+                "bc": bc,
+                "N": len(values),
+                "median": md,
+                "s_median": smd,
+                "spread": spr,
+
+            }
+            df = df.append(res, ignore_index = True)
+    return(df)
 
 def str_range(x, op = False, debug = False):
     '''

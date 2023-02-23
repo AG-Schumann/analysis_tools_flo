@@ -17,7 +17,10 @@ from datetime import datetime
 
 
 
-# NEW METHOD FOR GETTINGF Gate and Cathode
+
+
+
+# NEW METHOD FOR GETTING Gate and Cathode
 gc_info = {
    "gate": (ff.erf_lin, "lower right", "S1 area", "PE", "gate"),
    "cath": (ff.erf, "upper right", "counts", "", "cathode"),
@@ -277,3 +280,112 @@ def find_cathode_and_gate(
     })
 
     return(df_summary, df_indiv)
+
+
+# end of gate / cathode 
+
+
+
+# start of S2 correction
+
+
+
+def get_electron_lifetime(
+    ds,
+    tpc_geometry = False,
+    fig_path = False,
+    title = "",
+    f = ff.exp_decay,
+    bins = True,
+    index_tau = True,
+    verbose = False
+):
+    '''
+    calculates the electron lifetime based on drifttime and total S2 area
+    either '\33[1mtpc_geometry\33[0m' or '\33[1mbins\33[0m' need to be given to specify the time range/drift time bins
+    
+    returns tau, sigma_tau, chi^2_reduced
+    
+    parameters:
+    * ds:
+        the dataset (a [...]_summary datakind) to apply the fit
+    * tpc_geometry (False):
+        a gate_cathode correction dictionary (either the full thing or only the info part)
+        mystrax.get_correction_for("gate_cathode")
+    * bins (True):
+        bins to be used to bin S2 areas by drifttime into
+        if True: calculate bins based on tpc_geometry
+        if list/array: use those bins
+        anything else:
+            raises error
+    * fig_path (False):
+        if this is a string the script creats a figure and saves it onto the given filename
+    * title (""):
+        the title for the plot ("electron lifetime {title}")
+    * f (ff.exp_decay):
+        the function that is fitted to the data
+        (it should be of type fit_function)
+    * index_tau (True):
+        which of fs parameters is tau
+        if set to True the script searches the f.parameters for 'tau'
+        raises an error very early if failing
+        
+    '''
+    qp(f"starting >{title}<", verbose = verbose)
+    
+    if (index_tau is True) and ("tau" in f.parameters):
+            index_tau = f.parameters.index("tau")
+            qp(f", tau= {index_tau}", verbose = verbose)
+    elif isinstance(index_tau, bool) or not isinstance(index_tau, int):
+        # bool is a subclass of int.....
+        raise ValueError(f"can not find tau in functions parameters ({f.parameters}), please specify '\33[1mindex_tau\33[0m'")
+    
+    if isinstance(fig_path, str):
+        qp(", \33[32max\33[0m", verbose = verbose)
+        ax = fhist.ax()
+        ax.set_title(f"electron lifetime {title}")
+        ax.set_xlabel(f"drift time / µs")
+        ax.set_ylabel(f"mean S2 area / PE")
+    else:
+        ax = False
+        qp(", \33[31mno ax\33[0m", verbose = verbose)
+    
+    
+    if bins is True:
+        qp(", auto bins", verbose = verbose)
+        if tpc_geometry is False:
+            raise ValueError("either '\33[1mbins\33[0m' or '\33[1mtpc_geometry\33[0m' need to be given")
+        if "info" in tpc_geometry:
+            tpc_geometry = tpc_geometry["info"]
+    
+        bins = np.arange(tpc_geometry["dft_gate"], tpc_geometry["dft_cath"], 2)
+    
+    if not isinstance(bins, (list, np.ndarray)):
+        raise ValueError("either '\33[1mbins\33[0m' or '\33[1mtpc_geometry\33[0m' need to be given")
+        
+    qp(", binning", verbose = verbose)
+    df_median = fhist.get_binned_median(ds["drifttime"], ds["areas"][:,7], bins = bins, n_counts_min=5)
+    
+    x = df_median["bc"]
+    y = df_median["median"]
+    sy = df_median["s_median"]
+    spr = df_median["spread"]
+    
+    if isinstance(ax, plt.Axes):
+        color = fhist.errorbar(ax, x, y, sy, plot = True)
+        _ = fhist.errorbar(ax, x, y, spr, color = color, alpha = .5)
+    
+    qp(", fitting", verbose = verbose)
+    fit_res = ff.fit(f, x, y, sy, ax = ax, units = ["PE", "µs"], show_f = True)
+    fit, sfit, chi2 = fit_res
+    
+    if isinstance(ax, plt.Axes):
+        ax.legend(loc = "upper right")
+        qp(", saving", verbose = verbose)
+        plt.savefig(fig_path)
+        qp(", closing", verbose = verbose)
+        plt.close()
+        qp(", closing", end = "\n", verbose = verbose)
+        
+    return(fit[index_tau], sfit[index_tau], chi2[2])
+

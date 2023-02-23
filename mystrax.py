@@ -61,9 +61,6 @@ labels = {
 
 
 
-corrections = {
-    "gate_cathode": msc.correct_drifttime,
-}
 
 
 
@@ -343,7 +340,7 @@ def get_correction_for(typ = False, start = False, *_, limit = 1, v = False):
         * v (False): 'verbose', prints query parameters
         
     '''
-    valid_types = ["gate_cathode",]
+    valid_types = list(msc.corrections)
     
     if typ is True:
         print(f"valid types: {valid_types}")
@@ -480,7 +477,7 @@ def load(runs, target, context = False, config = False, check_load = True, v = T
 
         for run_id in run_ids:
             if len(run_ids) == 1:
-                bool_run = np.ones(len(data))
+                bool_run = np.array([True]*len(data))
             else:
                 bool_run = data["run_id"] == run_id
 
@@ -491,7 +488,7 @@ def load(runs, target, context = False, config = False, check_load = True, v = T
                 qp(f" {corection_type}")
                 corr = get_correction_for(corection_type, start_run)
                 info = corr["info"]
-                corrections[corection_type](data, info, bool_run)
+                msc.corrections[corection_type](data, info, bool_run)
             print()
         
     return(data)
@@ -555,7 +552,7 @@ def make_dV_dict(runs_all):
     return(runs_all_dVs)
 
 
-def make_df(runs_all):
+def make_df(runs_all, dict_types = True):
     df = pd.DataFrame()
     t0 = min([x["start"] for r, x in runs_all.items()])
     
@@ -567,12 +564,30 @@ def make_df(runs_all):
             
         }
         df = df.append(d, ignore_index=True)
+    
+    
+    
+    if dict_types is True:
+        # add here freely, only existing columns will be renamed
+        dict_types = {
+            'run': 'int32',
+            'N': 'int32',
+            'fields.adc': 'int32',
+        }
+    
+    
         
-    df = df.astype({
-        'run': 'int32',
-        'N': 'int32',
-        'fields.adc': 'int32',
-    })
+    if isinstance(dict_types, dict):
+        columns_names = df.columns.values
+        
+        dict_types = {
+            n:v
+            for n, v in dict_types.items()
+            if n in columns_names
+        }
+        
+        df = df.astype(dict_types)
+    
     return(df)
 
 
@@ -1282,7 +1297,8 @@ def process_linage(
                     config = config,
                     context = context,
                     v = False, 
-                    check_load = False
+                    check_load = False,
+                    correct = False
                 )
             else:
                 if verbose: print(f"{tcol}{target_todo}\33[0m not being loaded")

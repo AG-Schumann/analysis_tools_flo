@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 import inspect
 from flo_fancy import *
 from scipy.optimize import curve_fit
@@ -63,7 +64,18 @@ class fit_function:
 
 
 
-def fit(f, x, y, sigma = None, p0 = True, ax = False, units = None, color = None, verbose = False, label = "fit: ", show_gof = True, kwargs_curvefit = None, kwargs_plot = None):
+def fit(
+    f, x, y, sigma = None,
+    p0 = True,
+    ax = False,
+    units = None,
+    color = None,
+    label = "fit: ",
+    show_gof = True,
+    show_f = False,
+    verbose = False,
+    kwargs_curvefit = None,
+    kwargs_plot = None):
     
     
     if not isinstance(f, fit_function):
@@ -116,7 +128,10 @@ def fit(f, x, y, sigma = None, p0 = True, ax = False, units = None, color = None
             xp = np.linspace(min(x), max(x), 1000)
             yf = f(xp, *fit)
             color = ax.plot(xp, yf, label = f"{label}{chi_str}", color = color, **kwargs_plot)[0].get_color()
-
+            
+            if show_f is True:
+                addlabel(ax, f)
+            
             if units is None:
                 units = [""]*len(f)
             add_fit_parameters(ax, f, fit, sfit, units)
@@ -127,6 +142,23 @@ def fit(f, x, y, sigma = None, p0 = True, ax = False, units = None, color = None
         return(False)
     
 
+
+def add_fits_result_to_df(df, f, fit_result, dict_append = None):
+    if not isinstance(df, pd.core.frame.DataFrame):
+        raise TypeError("df must be a pandas Dataframe")
+    if not isinstance(f, fit_function):
+        raise TypeError("f must be a fit_function object")
+    if not isinstance(dict_append, dict):
+        dict_append = {}
+    
+    
+    fit, sfit, chi2 = fit_result
+    out = {"chi2": chi2[2], **dict_append}
+    for p, v, sv in zip(f, fit, sfit):
+        out[f"result_{p}"] = v
+        out[f"result_s{p}"] = sv
+    df = df.append(out, ignore_index = True)
+    return(df)
 
 
 
@@ -170,6 +202,26 @@ poly_1 = fit_function(
     parameters_tex = ["m", "c"],
     formula = "mx + c",
     formula_tex = "$m x + c$",
+    docstring = ''''''
+) 
+
+# second order polynomial
+def f_poly_2(x, a2, a1, a0):
+    return( a2*x**2 + a1*x + a0 )
+    
+def f_p0_poly_2(x, y):
+    x_, y_ = clean(x, y)
+    return(np.polyfit(x_, y_, deg = 2))
+    
+poly_2 = fit_function(
+    f = f_poly_2,
+    f_p0 = f_p0_poly_2,
+    description = "second order polynomial",
+    short_description = "second order polynomial",
+    parameters = ["a2", "a1", "a0"],
+    parameters_tex = ["a_2", "a_1", "a_0"],
+    formula = "a2 x² + a1 x + a0",
+    formula_tex = "$a_2 x^2 + a_1 x + a_0$",
     docstring = ''''''
 ) 
 

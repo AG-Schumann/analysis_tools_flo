@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import decimal
 from flo_fancy import *
 from default_bins import *
-import gate_cathode as gc
+import get_corrections as gc
 
 import inspect
 from datetime import datetime
@@ -734,7 +734,7 @@ def find_both_electrodes(kr, run_label, folder_out = False, show_p0 = False, sav
 
 
 
-def get_e_lifetime_from_run(kr, ax = False, bins = None, field = "area_s2", show_linearity = False, plt_x_offset = False, correct = False, *args, **kwargs):
+def get_e_lifetime_from_run(kr, ax = False, bins = None, field = "area_s2", show_linearity = False, plt_x_offset = False, *args, **kwargs):
     '''
 calculates the electron lifetime of a run based on the uncorrected S2 area and the drift time
 
@@ -765,7 +765,7 @@ the lifetime plus uncertainty (in  µs)
     names = kr.dtype.names
     # why raise an error myself if pythgon does it 
     field_x = [f for f in names_check if f in names][0]
-    data_x = kr[field_x]
+    data_x = kr["drifttime"]
     
     
     data_y = kr["areas"][:,7]
@@ -797,10 +797,7 @@ the lifetime plus uncertainty (in  µs)
     ycf = exp_decay_zero(xc, *fit)
 
 
-    if correct is True:
-        correct_s2(kr, fit[1])
-        cbc, cmedian, cmd_sd, cmd_unc, cmd_len = get_binned_data(kr["time_drift"], kr["cS2"], bins, save_plots_suffix = "_corrected", *args, **kwargs)
-
+    
 
 
 
