@@ -9,6 +9,7 @@ from threading import Thread, Event
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import mystrax_corrections as msc
+import get_corrections as gc
 
 def now():
     return(datetime.now())
@@ -51,13 +52,7 @@ corr_coll = db["correction_info"]
 
 
 
-labels = {
-    "event_fits": np.array(["first S1", "second S1", "first S2", "second S2"]),
-    "event_fits_summary": np.array(["first S1", "second S1", "first S2", "second S2", 'unsplit S1', 'unsplit S2', "total S1", "total S2"]),
-    "sp_krypton_summary": np.array(['first S1', 'second S1', 'first S2', 'second S2', 'unsplit S1', 'unsplit S2', 'total S1', 'total S2']),
-    
-}
-
+labels = gc.labels
 
 
 
@@ -373,6 +368,31 @@ def get_correction_for(typ = False, start = False, *_, limit = 1, v = False):
 
 
 
+def fiduzalize_z(ds, tpc_geometry, id_bool = False, sigmas = 1):
+    
+    if not isinstance(id_bool, np.ndarray):
+        id_bool = np.array([True] * len(ds))
+    
+    if "info" in tpc_geometry:
+        tpc_geometry = tpc_geometry["info"]
+    
+    fiducal_dft = (
+        tpc_geometry["dft_gate"] + sigmas * tpc_geometry["sigma_dft_gate"],
+        tpc_geometry["dft_cath"] - sigmas * tpc_geometry["sigma_dft_cath"],
+    )
+    
+    
+    outside_fid_volume_bool = (
+          (ds["drifttime"] < fiducal_dft[0])
+        | (ds["drifttime"] > fiducal_dft[1])
+    )
+    set_zero_bool = id_bool * outside_fid_volume_bool
+    ds["z"][set_zero_bool] = 0
+    
+    ds = ds[~set_zero_bool]
+    return(ds)
+
+
 
 def check(runs, target, context = False, config = False, cast_int = True, v = True):
     
@@ -397,7 +417,17 @@ def check(runs, target, context = False, config = False, cast_int = True, v = Tr
 
 
 
-def load(runs, target, context = False, config = False, check_load = True, v = True, correct = True, filters = True, **kwargs):
+def load(
+    runs, target,
+    context = False,
+    config = False,
+    check_load = True,
+    v = True,
+    correct = True,
+    filters = True,
+    fidu_z = False, 
+    **kwargs
+):
     '''
     loads data if availabe
     
@@ -419,7 +449,10 @@ def load(runs, target, context = False, config = False, check_load = True, v = T
         v: verbose toggle, prints messages
             default True
         filters (True): if True: looks for fields like OK and clean and returns only fields where these fields are True
-                if list of strings: uses list entires and checks them
+            if list of strings: uses list entires and checks them
+        fidu_z (0): if this is a number a fidicilisatzion if z will be done (only if corrections are applied)
+            the number is the measure for how many sigmas we move inwards to the main volume
+            (based on drift time position of gate and cathode)
     check_load
     
     '''
@@ -434,9 +467,9 @@ def load(runs, target, context = False, config = False, check_load = True, v = T
         if isinstance(check_load, str):
             target_ = check_load
         else:
-            target_ = target        
+            target_ = target
         runs = check(runs = runs, target = target_, context = context, config = config, v = v)
-        
+    
         
     if len(runs) == 0:
         if v is True: print("no runs to load")
@@ -449,6 +482,8 @@ def load(runs, target, context = False, config = False, check_load = True, v = T
     data =  context.get_array(runs, target, config = config, **kwargs)
     t1 = now()
     if v is True: print(f"    data loaded: {len(data)} entries for {len(runs)} runs in {t1-t0}")
+    
+    
     
     if filters is True:
         filters = ["OK", "clean"]
@@ -481,16 +516,27 @@ def load(runs, target, context = False, config = False, check_load = True, v = T
             else:
                 bool_run = data["run_id"] == run_id
 
-            data_run = data[bool_run]
             start_run = runs_info[run_id]["start"]
             qp(f"  * {run_id} ({start_run.strftime('%H:%M:%S %d.%m.%Y')}):")
+            pre_string = ""
             for corection_type in correct:
-                qp(f" {corection_type}")
+                qp(f"{pre_string} {corection_type}")
                 corr = get_correction_for(corection_type, start_run)
                 info = corr["info"]
                 msc.corrections[corection_type](data, info, bool_run)
-            print()
+                pre_string = ","
         
+            if not isinstance(fidu_z, bool) and isinstance(fidu_z, (int, float)):
+                # why is bool a subclass of int.......
+                tpc_geometry = get_correction_for("gate_cathode", start_run)
+                data = fiduzalize_z(data, tpc_geometry, id_bool = bool_run, sigmas = fidu_z)
+                qp(f", fidu_z ({len(data)})")
+        
+            print(", done")
+    
+        print("correcting done")
+    
+    print(f"\n\33[1m{tcol}data is ready\33[0m")
     return(data)
 
 
@@ -1259,7 +1305,7 @@ def process_linage(
     title = False,
     f_clear = False
 ):
-    if not isinstance(run, (str, int)):
+    if not isinstance(run, (str, int, np.number)):
         for i_r, r in enumerate(run):
             if callable(f_clear):
                 f_clear()

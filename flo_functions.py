@@ -68,6 +68,7 @@ def fit(
     f, x, y, sigma = None,
     p0 = True,
     ax = False,
+    clean_input = True,
     units = None,
     color = None,
     label = "fit: ",
@@ -85,6 +86,11 @@ def fit(
             kwargs_curvefit = {}
         if not isinstance(kwargs_plot, dict):
             kwargs_plot = {}
+        
+        
+        if clean_input is True:
+            x, y, sigma = clean(x, y, sigma)
+        
         
         if p0 is True:
             p0 = np.array(f.p0(x, y))

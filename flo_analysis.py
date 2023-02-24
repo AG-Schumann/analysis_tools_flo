@@ -734,7 +734,7 @@ def find_both_electrodes(kr, run_label, folder_out = False, show_p0 = False, sav
 
 
 
-def get_e_lifetime_from_run(kr, ax = False, bins = None, field = "area_s2", show_linearity = False, plt_x_offset = False, *args, **kwargs):
+def get_e_lifetime_from_run(kr, ax = False, bins = None, field = "area_s2", show_linearity = False, plt_x_offset = False, correct = False, *args, **kwargs):
     '''
 calculates the electron lifetime of a run based on the uncorrected S2 area and the drift time
 

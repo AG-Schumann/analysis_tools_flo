@@ -551,7 +551,18 @@ def binning(x, y, bins, label="bc"):
 
 
 
-def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=5):
+def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=5, path_medians = False, xlabel= "value", title = ""):
+    '''
+    
+    replaces %BC% in path_medians with current bin/label
+    
+    '''
+
+    ax_  = False
+    if "ax" not in inspect.getfullargspec(f_median).args:
+        path_medians = False
+        
+    
     binned_data = binning(x, y, bins)
     
     df = pd.DataFrame()
@@ -561,16 +572,28 @@ def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=5):
         N = len(values)
 
         if N >= n_counts_min:
-            md, spr, smd = f_median(values)
-            res = {
-                "bc": bc,
-                "N": len(values),
-                "median": md,
-                "s_median": smd,
-                "spread": spr,
+            if isinstance(path_medians, str):
+                ax_ = ax()
+                ax_.set_xlabel(xlabel)
+                ax_.set_title(title.replace("%BC%", f'{bc:.1f}'))
+                
+            median_result = f_median(values, ax = ax_)
+            if np.all(np.isfinite(median_result)):
+                md, spr, smd = median_result
+                res = {
+                    "bc": bc,
+                    "N": len(values),
+                    "median": md,
+                    "s_median": smd,
+                    "spread": spr,
 
-            }
-            df = df.append(res, ignore_index = True)
+                }
+                df = df.append(res, ignore_index = True)
+                
+            if isinstance(ax_, plt.Axes):
+                plt.savefig(path_medians.replace("%BC%", f'{bc:.1f}'))
+                plt.close()
+            
     return(df)
 
 def str_range(x, op = False, debug = False):

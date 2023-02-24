@@ -262,7 +262,7 @@ def sort(x, *args):
 
 
 def clean(*args):
-    _ = np.prod([np.isfinite(argi) for argi in args], axis = 0)
+    _ = np.prod([np.isfinite(argi) for argi in args if argi is not None], axis = 0)
     _, *argsf = remove_zero(_, *args)
     return(argsf)
 
