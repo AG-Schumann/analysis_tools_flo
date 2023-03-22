@@ -2,12 +2,13 @@ import os
 import sys
 import numpy as np
 import pandas as pd
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+from matplotlib.patches import Rectangle
 import scipy.stats
 import scipy.optimize
 from scipy.special import erf
-from matplotlib.patches import Rectangle
 from datetime import datetime
 import inspect
 from threading import Thread, Event
@@ -19,8 +20,33 @@ from flo_fancy import *
 import flo_functions as ff
 
 
-default_folder_out = f"/data/storage/userdata/{os.environ.get('USER')}"
 
+
+default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+def cmaps_default_colors():
+    return(
+        [mpl.colors.LinearSegmentedColormap.from_list("", ["white", color]) for color in default_colors]
+    )
+
+
+def next_color(ax):
+    return(
+        ax.plot([])[0].get_color()
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+default_folder_out = f"/data/storage/userdata/{os.environ.get('USER')}"
 def make_folder(path, msg_on_exist = False):
     try:
         os.mkdir(path)
@@ -114,7 +140,7 @@ def snow(fmt = "%H:%M:%S"):
 
 def fraction_exp(a = 0, b = np.inf, tau = tau_kr_lit):
     '''
-    calculates the integral of a normalized expoential function from a to b
+    calculates the integral of a normalized expoential function from a to b6
     
     parameters:
       a (default: 0): start of integration
@@ -143,7 +169,13 @@ def make_dict(**kwargs):
 
 
 
-def make_fig(nrows=1, ncols=1, w=6, h=4, rax = True, n_tot = False, axis_off = False, *args, **kwargs):
+def make_fig(
+    nrows=1, ncols=1,
+    w=6, h=4,
+    rax = True,
+    n_tot = False,
+    axis_off = False,
+    *args, **kwargs):
     '''
     creates a figure with nrows by ncols plots
     n_tot: total number of cells, overwrites nrow and ncols, set negative to make plot wider than tall
@@ -190,15 +222,59 @@ def make_fig(nrows=1, ncols=1, w=6, h=4, rax = True, n_tot = False, axis_off = F
     if axis_off is True:
         for ax in axs.reshape(-1):
             ax.set_axis_off()
-            
+    
+    
     return(fig, axs)
 
-def ax(**kwargs):
+
+def add_labs(ax, labs):
+    '''
+    order of labs: x, y, title
+    or dict with keys: x, y, t
+    '''
+    
+    fs = {
+        "x": ax.set_xlabel,
+        "y": ax.set_ylabel,
+        "t": ax.set_title,        
+    }
+    
+    if isinstance(labs, (tuple, list)):
+        for l, f in zip(labs, "xyt"):
+            fs[f](l)
+    if isinstance(labs, dict):
+        for k, l in labs.items():
+            if k in fs:
+                fs[k](l)
+
+def ax(*labs, **kwargs):
     fig, ax = make_fig(**{"rax": False, **kwargs})
+    add_labs(ax, labs)
     return(ax)
+
+def ax2(*labs, reminder = True, **kwargs):
+    '''
+    use
+        'ax2.set_ylim(ax.get_ylim())'
+    before saving!!!!
+    '''
+    ax2 = ax(*labs, **kwargs)
+    ax_ = ax2.twinx()
+    if reminder is not False:
+        ax_.set_ylabel("call fhist.fax(ax, ax2) before saving to fix axis")
+    
+    return(ax_, ax2)
+
+
+def fax(ax_, ax2):
+    ax_.set_axis_off()
+    ax2.set_ylim(ax_.get_ylim())
+    
+
 
 def errorbar(
     ax, x, y, sy,
+    sx = None,
     ax2 = False,
     color = None, capsize = 5,
     linestyle = "", label = "",
@@ -219,14 +295,13 @@ def errorbar(
         if slimit is True:
             slimit = 10 * np.median(clean(sy))
         if isinstance(ax2, plt.Axes):
-            ax2.errorbar(x, y, yerr = sy, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
+            ax2.errorbar(x, y, yerr = sy, xerr = sx, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
             
-        _, x, y, sy = remove_zero(np.abs(sy) < np.abs(slimit), x, y, sy)
+        _, x, y, sy, sx = remove_zero(np.abs(sy) < np.abs(slimit), x, y, sy, sx)
     
-    ax.errorbar(x, y, yerr = sy, label = label, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
+    ax.errorbar(x, y, yerr = sy, xerr = sx, label = label, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
 
     return(color)
-
 
 
 
@@ -237,10 +312,12 @@ def median_gauss(
     bins_median = "auto",
     f = ff.gauss,
     ax = False,
+    bining_width_in_mads = 4,
     show_p0 = False,
     show_bw = False,
     return_chi2 = False,
     return_all = False,
+    strict_positive = False,
     *args, **kwargs
 ):
     '''
@@ -270,16 +347,24 @@ parameters:
 
     
 
+    if strict_positive is True:
+        x_ = x_[x_ > 0]
+        
     
     
     med = np.median(x_)
-    width = 6*np.median(np.abs(x_ - med))
+    width = bining_width_in_mads*np.median(np.abs(x_ - med))
     if not isinstance(bins_median, (np.ndarray, list, tuple)):
+        lower_bound, upper_bound = med-width, med+width
+        if strict_positive is True:
+            lower_bound = np.max([0, lower_bound])
+        
+        
         if bins_median == "auto":
-            bins_median = np.linspace(med-width, med+width, 12)
+            bins_median = np.linspace(lower_bound, upper_bound, 12)
         elif isinstance(bins_median, (int, float)):
             if bins_median > 0:
-                bins_median = np.linspace(med-width, med+width, int(bins_median))
+                bins_median = np.linspace(lower_bound, upper_bound, int(bins_median))
             else:
                 bins_median = int(-bins_median)
     
@@ -320,6 +405,7 @@ parameters:
         "bc": bc,
         "bw": bw,
         "counts": counts,
+        "N": int(np.sum(counts)),
         "s_counts": s_counts,
         "density": density,
         "s_density": s_density,
@@ -384,26 +470,53 @@ def sliding(*x, f = False, ext = 1):
     )
 
 
-def median(x, percentile = 68.2, clean = True, ax=False, *args, **kwargs):
+def median(x, percentile = 68.2, clean = True, ax=False, return_all = False, *args, **kwargs):
+    
+    '''
+    strict_positive is just for comatablitiy with median_gauss
+    '''
     x_ = np.array(x)*1
     if clean is True:
         x_ = x_[np.isfinite(x_)]
 
+
+    n = len(x_)
     med = np.median(x_)
     mad = np.percentile(np.abs(x_ - med), percentile)
-    unc_med = mad/len(x_)**.5
+    
+    mn, std, unc_mn = mean(x_)
+    
+    
+    unc_med = unc_mn * (np.pi*((2*n+1)/4/n))**.5
     
     
     if isinstance(ax, plt.Axes):
+        x_sort = np.sort(x_)
         
-        col = ax.axvline(med, label = f"median: {med:.1f} ± {unc_med:.1f}", *args, **kwargs).get_color()
+        
+        ax.set_ylabel("fraction")
+        fraction = np.linspace(0,1, len(x_sort))
+        ax.plot(x_sort, fraction, ".-", label = f"datapoints (N = {n})")
+        
+        
+        
+        col = ax.plot([], "")[0].get_color()
+        ax.axhline(.5, color = col, linestyle = "dashed")
+        ax.axvline(med, label = f"median: ${tex_value(med, unc_med)}$", color = col)
         ax.axvspan(med-unc_med,med+unc_med, color = col, alpha = .25)
-        ax.axvspan(med-mad,med+mad, label = f"spread: {mad:.1f}", color = col, alpha = .1)
+        ax.axvspan(med-mad,med+mad, label = f"68% spread: {mad:.1f}", color = col, alpha = .1)
         
+        
+        ax.legend(loc = "lower right")
+    ret_all = {
+        "N": len(x_),
+    }
     
+    out = med, mad, unc_med
+    if return_all is True:
+        out = (*out, ret_all)
     
-    return(med, mad, unc_med)
-
+    return(out)
 
 
 
@@ -550,8 +663,7 @@ def binning(x, y, bins, label="bc"):
     return(bin_contents)
 
 
-
-def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=5, path_medians = False, xlabel= "value", title = ""):
+def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=10, path_medians = False, xlabel= "value", title = "", strict_positive = False, md_min_value = False, ax = False, color  = True):
     '''
     
     replaces %BC% in path_medians with current bin/label
@@ -564,11 +676,21 @@ def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=5, path_
         
     
     binned_data = binning(x, y, bins)
+    bw = np.diff(bins)
     
     df = pd.DataFrame()
     
     
-    for bc, values in binned_data.items():
+    if isinstance(ax, plt.Axes) and isinstance(color, bool):
+        color = ax.plot([])[0].get_color()
+    
+    
+    if (strict_positive is True) and (md_min_value is False):
+        md_min_value = 0  
+    
+    
+    
+    for bwi, (bc, values) in zip(bw, binned_data.items()):
         N = len(values)
 
         if N >= n_counts_min:
@@ -577,24 +699,115 @@ def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=5, path_
                 ax_.set_xlabel(xlabel)
                 ax_.set_title(title.replace("%BC%", f'{bc:.1f}'))
                 
-            median_result = f_median(values, ax = ax_)
-            if np.all(np.isfinite(median_result)):
+            *median_result, ret_all = f_median(values, ax = ax_, strict_positive = strict_positive, return_all = True)
+            if np.all(np.isfinite(median_result)) and (ret_all["N"] >= n_counts_min):
                 md, spr, smd = median_result
-                res = {
-                    "bc": bc,
-                    "N": len(values),
-                    "median": md,
-                    "s_median": smd,
-                    "spread": spr,
+                if (md_min_value is False) or (md >= md_min_value):
+                        
+                        
+                    res = {
+                        "bc": bc,
+                        "N": len(values),
+                        "median": md,
+                        "s_median": smd,
+                        "spread": spr,
 
-                }
-                df = df.append(res, ignore_index = True)
-                
+                    }
+                    df = df.append(res, ignore_index = True)
+                    
+                    if isinstance(ax, plt.Axes):
+            
+                        bc_y = ret_all["bc"]
+                        cx = ret_all["counts"]
+                        scx = ret_all["s_counts"]
+                        
+                        scale = (bwi * .9) / np.max(cx+scx)
+                        
+                        xp = cx*scale + bc - bwi/2
+                        sxp = [scx[0]*scale, scx[1]*scale]
+                        
+                        errorbar(ax, x = xp, sx = sxp, sy = None, y = bc_y, plot = True, color = color, alpha = .1)
+                        
+                        yp_fit = lin_or_logspace(bc_y, 100)
+                        xp_fit = ff.gauss(yp_fit, *ret_all["fit"]) * scale + bc - bwi/2
+                        
+                        ax.plot(xp_fit, yp_fit, color = color, alpha = .5)
+                   
             if isinstance(ax_, plt.Axes):
+                plt.subplots_adjust(top = .85)
                 plt.savefig(path_medians.replace("%BC%", f'{bc:.1f}'))
                 plt.close()
             
     return(df)
+
+
+
+def calc_linearity(x, y, sy, ax = False, color = None, units_xy = False, **kwargs):
+    if units_xy is False:
+       units_0 = [""]
+       units_1 = ["", ""]
+    elif isinstance(units_xy, (list, tuple, np.ndarray)):
+        if len(units_xy) != 2:
+            raise ValueError("units_xy must have two entries!")
+        unit_x, unit_y = units_xy
+        
+        units_0 = [unit_y]
+        if unit_x == "":
+            units_1 = [unit_y, unit_y]
+        else:
+            units_1 = [f"{unit_y}/{unit_x}", unit_y]
+    
+
+    # f_fit_poly_0 = ff.poly_0
+    # fit_poly_0 = ff.fit(f_fit_poly_0, x, y, sy, ax = ax, color = color, units = units_0, label = "constant fit")
+    f_fit_poly_1 = ff.poly_1
+    fit_poly_1 = ff.fit(f_fit_poly_1, x, y, sy, ax = ax, color = color, units = units_1, label = "linear fit", kwargs_plot=dict(linestyle = "dashed"))
+
+    out = {
+        # "fit_poly_0": fit_poly_0,
+        # "f_fit_poly_0": f_fit_poly_0,
+        "fit_poly_1": fit_poly_1,
+        "f_fit_poly_1": f_fit_poly_1,
+    }
+    return(out)
+
+def draw_binned_median_df(
+    df_median,
+    ax = False,
+    ax2 = False,
+    slimit = True,
+    bool_calc_linearity = False,
+    units_xy = False,
+    alpha_spr = 0,
+    draw_x_offset = 0,
+    **kwargs,
+):
+    out = {}
+    
+    x = df_median["bc"]
+    y = df_median["median"]
+    sy = df_median["s_median"]
+    spr = df_median["spread"]
+    out["data_binned"] = [x, y, sy, spr]
+
+    color = False
+    if isinstance(ax, plt.Axes):
+        color = errorbar(ax, x+draw_x_offset, y, sy, plot = True, slimit = slimit, **kwargs, ax2 = ax2)
+        if alpha_spr > 0:
+            _ = errorbar(ax, x+draw_x_offset, y, spr, color = color, alpha = .5, slimit = slimit, ax2 = ax2)
+    
+    
+    out["color"] = color
+    if bool_calc_linearity is True:
+        out_lin = calc_linearity(x, y, sy, ax = ax, color = color, units_xy = units_xy, **kwargs)
+        out = {**out, **out_lin}
+        
+
+
+    return(out)
+
+
+
 
 def str_range(x, op = False, debug = False):
     '''

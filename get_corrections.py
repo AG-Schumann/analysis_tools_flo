@@ -6,6 +6,7 @@ import flo_functions as ff
 import matplotlib.pyplot as plt
 from default_bins import *
 from flo_fancy import *
+import mystrax_corrections as msc
 
 import inspect
 from datetime import datetime
@@ -295,204 +296,32 @@ def find_cathode_and_gate(
 
 
 
-# start of S2 correction
 
 
-
-def get_electron_lifetime(
+# correction parameter base function
+def get_correction_paramters(
     ds,
     tpc_geometry = False,
-    fig_path = False,
-    ax = False,
-    title = "",
-    f = ff.exp_decay,
-    bins = True,
-    index_tau = True,
-    verbose = False,
-    field_id = 2,
-    plugin = "event_fits_summary",
-    show_corrected = False,
-    calc_linearity = False,
-    return_all = False,
-    path_medians = False,
-):
-    '''
-    calculates the electron lifetime based on drifttime and total S2 area
-    either '\33[1mtpc_geometry\33[0m' or '\33[1mbins\33[0m' need to be given to specify the time range/drift time bins
-    
-    returns tau, sigma_tau, chi^2_reduced
-    
-    parameters:
-    * ds:
-        the dataset (a [...]_summary datakind) to apply the fit
-    * tpc_geometry (False):
-        a gate_cathode correction dictionary (either the full thing or only the info part)
-        mystrax.get_correction_for("gate_cathode")
-    * bins (True):
-        bins to be used to bin S2 areas by drifttime into
-        if True: calculate bins based on tpc_geometry
-        if list/array: use those bins
-        anything else:
-            raises error
-    * fig_path (False):
-        if this is a string the script creats a figure and saves it onto the given filename
-    * title (""):
-        the title for the plot ("electron lifetime {title}")
-    * f (ff.exp_decay):
-        the function that is fitted to the data
-        (it should be of type fit_function)
-    * index_tau (True):
-        which of fs parameters is tau
-        if set to True the script searches the f.parameters for 'tau'
-        raises an error very early if failing
-        
-    '''
-    qp(f"starting >{title}<", verbose = verbose)
-    
-    
-    if len(ds) <= 10:
-        print(f" \33[0mgot only {len(ds)} datapoints, quitting\33[0m")
-        return(0,0,0)
-    
-    out = {}
-    if (index_tau is True) and ("tau" in f.parameters):
-            index_tau = f.parameters.index("tau")
-            qp(f", tau= {index_tau}", verbose = verbose)
-    elif isinstance(index_tau, bool) or not isinstance(index_tau, int):
-        # bool is a subclass of int.....
-        raise ValueError(f"can not find tau in functions parameters ({f.parameters}), please specify '\33[1mindex_tau\33[0m'")
-    
-    if isinstance(fig_path, str):
-        qp(", \33[32max created\33[0m", verbose = verbose)
-        ax = fhist.ax()
-    
-        
-    if isinstance(ax, plt.Axes):
-        qp(", \33[32max given\33[0m", verbose = verbose)
-        data_label = labels[plugin][field_id]
-        ax2 = ax
-        ax = ax2.twinx()
-        ax.set_axis_off()
-        ax2.set_title(f"electron lifetime {title}")
-        ax2.set_xlabel(f"drift time / µs")
-        ax2.set_ylabel(f"mean {data_label} area / PE")
-    else:
-        ax = False
-        qp(", \33[31mno ax\33[0m", verbose = verbose)
-    
-    
-    if bins is True:
-        qp(", auto bins", verbose = verbose)
-        if tpc_geometry is False:
-            raise ValueError("either '\33[1mbins\33[0m' or '\33[1mtpc_geometry\33[0m' need to be given")
-        if "info" in tpc_geometry:
-            tpc_geometry = tpc_geometry["info"]
-    
-        bins = np.arange(tpc_geometry["dft_gate"], tpc_geometry["dft_cath"], 2)
-    
-    if not isinstance(bins, (list, np.ndarray)):
-        raise ValueError("either '\33[1mbins\33[0m' or '\33[1mtpc_geometry\33[0m' need to be given")
-        
-    qp(", binning", verbose = verbose)
-    
-    if np.all(ds["drifttime_corrected"] == 0):
-        data_x = ds["drifttime"]
-    else:
-        data_x = ds["drifttime_corrected"]
-        bins = bins + ds["drifttime_corrected"][0] - ds["drifttime"][0] 
-    
-    data_y = ds["areas"][:,field_id]
-    
-    out["data"] = [data_x, data_y]
-    
-    df_median = fhist.get_binned_median(
-        data_x, data_y,
-        bins = bins,
-        n_counts_min=5,
-        path_medians = path_medians, xlabel= f"{data_label} area / PE", title = f"{title} %BC% µs"
-    )
-    
-    x = df_median["bc"]
-    y = df_median["median"]
-    sy = df_median["s_median"]
-    spr = df_median["spread"]
-    out["data_binned"] = [x, y, sy, spr]
-    
-    
-    if isinstance(ax, plt.Axes):
-        
-        slimit = np.median(sy)*10
-        color = fhist.errorbar(ax, x, y, sy, plot = True, slimit = slimit, label = f"data: {data_label} area", ax2 = ax2)
-        _ = fhist.errorbar(ax, x, y, spr, color = color, alpha = .5, slimit = slimit, ax2 = ax2)
-        
-        
-        
-    
-    qp(", fitting", verbose = verbose)
-    fit_res = ff.fit(f, x, y, sy, ax = ax, color = color, units = ["PE", "µs"])
-    fit, sfit, chi2 = fit_res
-    
-    out["fit"] = fit_res
-    out["f_fit"] = f
-    
-    
-    if isinstance(ax, plt.Axes):
-        if (show_corrected is True) or (calc_linearity is True):
-            data_y_c = data_y * np.exp(data_x/fit[index_tau])
-            
-            out["data_c"] = [data_x, data_y_c]
-            df_median_c = fhist.get_binned_median(data_x, data_y_c, bins = bins, n_counts_min=5)
-            
-            x_c = df_median_c["bc"]
-            y_c = df_median_c["median"]
-            sy_c = df_median_c["s_median"]
-            spr_c = df_median_c["spread"]
-            out["data_binned"] = [x_c, y_c, sy_c, spr_c]
-            
-            
-            color_corrected = fhist.errorbar(ax, x_c, y_c, sy_c, plot = True, slimit = slimit, label = "corrected data", marker = "x", ax2 = ax2)
-            _ = fhist.errorbar(ax, x_c, y_c, spr_c, color = color_corrected, alpha = .5, slimit = slimit, ax2 = ax2)
-        
-            if calc_linearity is True:
-                f_fit_poly_0 = ff.poly_0
-                f_fit_poly_1 = ff.poly_1
-                fit_poly_0 = ff.fit(f_fit_poly_0, x_c, y_c, sy_c, ax = ax, color = color_corrected, units = ["PE"], label = "constant fit")
-                fit_poly_1 = ff.fit(f_fit_poly_1, x_c, y_c, sy_c, ax = ax, color = color_corrected, units = ["PE/µs", "PE"], label = "linear fit", kwargs_plot=dict(linestyle = "dashed"))
-                
-                out["fit_poly_0"] = fit_poly_0
-                out["fit_poly_1"] = fit_poly_1
-                out["f_fit_poly_0"] = f_fit_poly_0
-                out["f_fit_poly_1"] = f_fit_poly_1
-            
-    
-    
-        ax.legend(loc = (1.01, 0.2), fontsize = 8)
-        ax2.set_ylim(ax.get_ylim())
-        
-        if isinstance(fig_path, str):
-            qp(", saving", verbose = verbose)
-            plt.savefig(fig_path)
-            qp(", closing", verbose = verbose)
-            plt.close()
-        qp(", done", end = "\n", verbose = verbose)
-        
-    if return_all is not True:
-        return(fit[index_tau], sfit[index_tau], chi2[2])
-    else:
-        return(fit[index_tau], sfit[index_tau], out)
-
-
-# S1 correction
-
-def get_S1_correction_paramters(
-    ds,
-    tpc_geometry = False,
-    fig_path = False,
+    name_fig = False,
+    path_fig = False,
+    path_fits = False,
     title = "",
     f = ff.poly_1,
     bins = True,
+    auto_bin_width = 4,
+    n_counts_min = 10,
     verbose = False,
-    
+    field_id = True,
+    plugin = "event_fits_summary",
+    f_median = fhist.median_gauss,
+    show_corrected = False,
+    correct_fraction_time = 0.5,
+    calc_linearity = True,
+    show_m_over_c = False,
+    return_all = True,
+    base_type = "S1",
+    units = False,
+    units_xy = False,
 ):
     '''
     calculates the electron lifetime based on drifttime and total S2 area
@@ -527,15 +356,56 @@ def get_S1_correction_paramters(
     '''
     qp(f"starting >{title}<", verbose = verbose)
     
-    if isinstance(fig_path, str):
-        qp(", \33[32max\33[0m", verbose = verbose)
-        ax = fhist.ax()
-        ax.set_title(f"S1 correction {title}")
-        ax.set_xlabel(f"corrected drift time / µs")
-        ax.set_ylabel(f"mean S2 area / PE")
+    
+    
+    if isinstance(base_type, str):
+        if base_type == "S1":
+            f = ff.poly_1
+            correct_fraction_time = .5
+            if isinstance(field_id, bool):
+                field_id = 0
+            units = ["PE/µs", "PE"]
+            units_xy = ["µs", "PE"]
+        
+        if base_type == "S2":
+            f = ff.exp_decay
+            correct_fraction_time = 0
+            if isinstance(field_id, bool):
+                field_id = 2
+            units = ["PE", "µs"]
+            units_xy = ["µs", "PE"]
+    
+    data_label = labels[plugin][field_id]
+    title = f"{data_label} correction {title}"
+    out = dict()
+    out["f"] = f
+    out["units"] = units
+    
+    if isinstance(name_fig, str) and isinstance(path_fig, str):
+        qp(", \33[32mpath given\33[0m", verbose = verbose)
+        ax, ax2 = fhist.ax2(
+            "corrected drift time / µs",
+            f"mean {data_label} / PE",
+            f"{title}",
+            w = 7,
+        )
+        path_fig_png = f"{path_fig}/{name_fig}.png"
     else:
-        ax = False
+        ax = ax2 = False
+        color = "black"
         qp(", \33[31mno ax\33[0m", verbose = verbose)
+        path_fig_png = False
+    
+    
+    if isinstance(name_fig, str) and isinstance(path_fits, str):
+        qp(", \33[32mpath_fits given\33[0m", verbose = verbose)
+        path_medians_png_u = f"{path_fits}/01_uncorrected_{name_fig}_%BC%.png"
+        path_medians_png_c = f"{path_fits}/02_corrected_{name_fig}_%BC%.png"
+    else:
+        path_medians_png_u = False
+        path_medians_png_c = False
+    
+    
     
     
     if bins is True:
@@ -545,43 +415,123 @@ def get_S1_correction_paramters(
         if "info" in tpc_geometry:
             tpc_geometry = tpc_geometry["info"]
     
-        bins = np.arange(0, tpc_geometry["dft_cath"], 2)
+        bins = np.arange(0, tpc_geometry["dft_cath"], auto_bin_width)
     
     if not isinstance(bins, (list, np.ndarray)):
         raise ValueError("either '\33[1mbins\33[0m' or '\33[1mtpc_geometry\33[0m' need to be given")
-        
+    
+    
+    
+    
+    
+    data_x = ds["drifttime_corrected"]
+    data_y = ds["areas"][:,field_id]
+    
+    
+    
     qp(", binning", verbose = verbose)
-    df_median = fhist.get_binned_median(ds["drifttime_corrected"], ds["areas"][:,6], bins = bins, n_counts_min=5)
+    df_median = fhist.get_binned_median(
+        data_x, data_y,
+        bins = bins,
+        f_median = f_median,
+        n_counts_min=n_counts_min,
+        path_medians = path_medians_png_u,
+        title = f"uncorrected {title} (%BC% µs)",
+        strict_positive = True,
+        xlabel = f"area {data_label} / PE",
+    )
     
-    x = df_median["bc"][1:-1]
-    y = df_median["median"][1:-1]
-    sy = df_median["s_median"][1:-1]
-    spr = df_median["spread"][1:-1]
     
-    if isinstance(ax, plt.Axes):
-        color = fhist.errorbar(ax, x, y, sy, plot = True, slimit = True)
-        _ = fhist.errorbar(ax, x, y, spr, color = color, alpha = .5, slimit = True)
+    
+    result_drawing = fhist.draw_binned_median_df(
+        df_median,
+        ax = ax,
+        ax2 = ax2,
+        slimit = True,
+        label = f"data ({data_label})",
+        bool_calc_linearity = False,
+        units_xy = units_xy,
+    )
+    
+    x, y, sy, spr = result_drawing["data_binned"]
+    color = result_drawing["color"]
     
     qp(", fitting", verbose = verbose)
     fit_res = ff.fit(
         f,
         x, y, sy,
         ax = ax,
-        units = ["PE/µs", "PE"],
-        show_f = True)
-    fit, sfit, chi2 = fit_res
+        units = units,
+        show_f = True,
+        color = color,
+        return_cov = True,
+    )
+    fit, cov, chi2 = fit_res
+    sfit = np.diag(cov)**.5
     
-    if isinstance(ax, plt.Axes):
-        ax.legend(loc = "upper right")
+    if show_m_over_c is True:
+        m, c = fit
+        sm, sc = fit
+        moc = m/c
+        s_moc = np.abs(moc)*((sm/m)**2 + (sc/c)**2 - 2 *(cov[0][1]**.5)/(m * c))**.5
+        unit = "1/µs"
+        addlabel(ax, f"$\\frac{{m}}{{c}}= {tex_value(moc, s_moc, unit)}$")
+    
         
-        if isinstance(fig_path, str):
+        
+        
+    if (show_corrected is True) or (calc_linearity is True):
+        if tpc_geometry is False:
+            max(bins) * correct_fraction_time 
+        else:
+            t_correction = (tpc_geometry["dft_cath"] - tpc_geometry["dft_gate"]) * correct_fraction_time
+        
+        # change this to the actual gc.function
+        data_y_c = data_y *f(t_correction, *fit) / f(data_x, *fit)
+        df_median_c = fhist.get_binned_median(
+            data_x,
+            data_y_c,
+            bins = bins,
+            f_median = f_median,
+            n_counts_min=n_counts_min,
+            path_medians = path_medians_png_c,
+            title = f"corrected {title} (%BC% µs)",
+            strict_positive = True,
+            xlabel = f"corrected area {data_label} / PE",
+            
+        )
+
+        result_drawing_corr = fhist.draw_binned_median_df(
+            df_median_c,
+            ax = ax,
+            ax2 = ax2,
+            slimit = True,
+            bool_calc_linearity = True,
+            units_xy = units_xy,
+            label = f"corrected data ({t_correction:.1f} µs)",
+            marker = "x",
+        )
+        
+        
+        # out["fit_poly_0"] = result_drawing_corr["fit_poly_0"]
+        # out["f_fit_poly_0"] = result_drawing_corr["f_fit_poly_0"]
+        out["fit_poly_1"] = result_drawing_corr["fit_poly_1"]
+        out["f_fit_poly_1"] = result_drawing_corr["f_fit_poly_1"]
+        
+            
+    if isinstance(ax, plt.Axes):
+        plt.subplots_adjust(right = .65, top = .85)
+        ax.legend(loc = (1.01, 0.2), fontsize = 8)
+        ax2.set_ylim(ax.get_ylim())
+        if isinstance(path_fig_png, str):
+        
             qp(", saving", verbose = verbose)
-            plt.savefig(fig_path)
+            plt.savefig(path_fig_png)
             qp(", closing", verbose = verbose)
             plt.close()
         qp(", done", end = "\n", verbose = verbose)
         
 
     
-    return(fit_res)
-
+    return((fit, sfit, chi2, cov), out)
+    

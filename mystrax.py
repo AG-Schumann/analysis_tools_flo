@@ -26,20 +26,9 @@ tcol = "\33[36m"
 # import 
 sys.path.insert(0,"/data/workspace/Flo/straxbra_flo/strax")
 import strax
-print(f"{tcol}Strax:\33[0m")
-print(f"Strax version: {strax.__version__}")
-print(f"Strax file:    {strax.__file__}")
 
 sys.path.insert(0,"/data/workspace/Flo/straxbra_flo/straxbra")
 import straxbra
-print(f"{tcol}Straxbra:\33[0m")
-print(f"straxbra file:           {straxbra.__file__}")
-# print(f"straxbra version:        {straxbra.__version__}")
-# print(f"SpKrypton version:       {straxbra.plugins.SpKrypton.__version__}")
-# print(f"GaussfitPeaks version:   {straxbra.plugins.GaussfitPeaks.__version__}")
-# print(f"SPKryptonS2Fits version: {straxbra.plugins.SPKryptonS2Fits.__version__}")
-print(f"EventFits version:       {straxbra.plugins.EventFits.__version__}")
-
 
 eff = straxbra.plugins.eff
 context_sp = straxbra.SinglePhaseContext()
@@ -91,6 +80,55 @@ def draw_multi_woa_multi(ds, axs, draw_list=False, plugin = "event_fits_summary"
         
     for ax, draw, title in zip(axs, draw_list, titles):
         draw_woa_multi(ds, ax = ax, draw = draw, plugin = plugin, title = title, **kwargs)
+
+def draw_woa_single(
+    a, w, ax = False,
+    label = "Signal",
+    cmap = "Purples",
+    show_counts = True,
+    setup = True,
+):
+    '''
+    
+    cmap:
+        'Purples', 'Reds', 'Blues','Greens','Oranges'
+    '''
+
+    if not isinstance(ax, plt.Axes):
+        raise TypeError("ax must be plt.Axes")
+        
+    count, bca, bcw = fhist.make_2d_hist_plot(a, w)
+    n_count = np.nansum(count, dtype = int)
+    count_ = count / n_count
+    
+    
+    if show_counts is True:
+        label = f"{label} (N: {n_count})"
+    im_ = ax.pcolormesh(
+        bca, bcw,
+        count_.T,
+        norm=fhist.LogNorm(),
+        cmap = cmap,
+    )
+
+    if setup is True:
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        ax.set_xlabel(fhist.defaults["2d_hist_label_area"])
+        ax.set_ylabel(fhist.defaults["2d_hist_label_width"])
+
+
+    color = mpl.cm.get_cmap(cmap)(.75)
+    if label != "":
+        ax.plot(
+            [],
+            "o",
+            color = color,
+            label = label
+        )
+        
+        ax.legend(loc = "upper right")
+    return(color, n_count)
 
 def draw_woa_multi(
     ds, ax = False, draw = "0123", plugin = "event_fits_summary", add_grid = True, show_only_max_count = True,
@@ -154,7 +192,7 @@ def draw_woa_multi(
             
             count, bca, bcw = fhist.make_2d_hist_plot(ds[field_a][:, j], ds[field_w][:, j])
             
-            n_precut = np.nansum(count, dtype = int)            
+            n_precut = np.nansum(count, dtype = int)
             
             count[count < vmin] = 0
             n_postcut = np.nansum(count, dtype = int)
@@ -323,7 +361,9 @@ def find_config(target = ""):
 
 
 
-def get_correction_for(typ = False, start = False, *_, limit = 1, v = False):
+
+
+def get_correction_for(typ = False, start = False, *_, plugin = False, run = False, limit = 1, v = False):
     '''
     returns correcions for types various types:
         get the types by calling this funciotn witout an argument
@@ -347,24 +387,54 @@ def get_correction_for(typ = False, start = False, *_, limit = 1, v = False):
 
     if start is False:
         start = datetime.now()
-
     
-    if v is True:
-        print(f"call: typ: {typ}, start: {start}, limit: {limit}")
-            
-            
-    correction = list(corr_coll.find(
-        {
-            "type": typ,
-            "date": {"$lt": start},
+    
+    
+    filters = [{"type": typ}]
+    
+    
+    if run is not False:
+        filters.append({
+            "$or": [
+                {"run":run},
+                {"$and":[
+                    {"run": {"$exists": False}},
+                    {"date": {"$lte": start}},
+                ]}
+            ]
+        })
+    else:
+        filters.append({"date": {"$lte": start}})
 
-        },
+    if isinstance(plugin, str):
+        filters.append({
+            "$or": [
+                {"plugin": {"$exists": False}},
+                {"plugin": plugin},
+            ]
+        })
+    
+    
+    filters = {"$and": filters}
+    
+    
+    
+    correction = list(corr_coll.find(
+        filters,
         sort = [('_id', -1)],
-        limit = limit,
+        limit = limit,#
     ))
+    
+    
     if (limit == 1) and len(correction) == 1:
         correction = correction[0]
     return(correction)
+
+
+
+
+
+
 
 
 
@@ -518,18 +588,23 @@ def load(
 
             start_run = runs_info[run_id]["start"]
             qp(f"  * {run_id} ({start_run.strftime('%H:%M:%S %d.%m.%Y')}):")
+            
+            tpc_info = get_correction_for("gate_cathode", start_run)["info"]
             pre_string = ""
             for corection_type in correct:
                 qp(f"{pre_string} {corection_type}")
-                corr = get_correction_for(corection_type, start_run)
+                corr = get_correction_for(corection_type, start_run, plugin = target, run = run_id)
+                if "run" in corr:
+                    qp(f" ({corr['run']})")
                 info = corr["info"]
-                msc.corrections[corection_type](data, info, bool_run)
+                msc.corrections[corection_type](data, info, tpc_info, bool_run)
                 pre_string = ","
         
-            if not isinstance(fidu_z, bool) and isinstance(fidu_z, (int, float)):
+        
+        
                 # why is bool a subclass of int.......
-                tpc_geometry = get_correction_for("gate_cathode", start_run)
-                data = fiduzalize_z(data, tpc_geometry, id_bool = bool_run, sigmas = fidu_z)
+            if not isinstance(fidu_z, bool) and isinstance(fidu_z, (int, float)):
+                data = fiduzalize_z(data, tpc_info, id_bool = bool_run, sigmas = fidu_z)
                 qp(f", fidu_z ({len(data)})")
         
             print(", done")

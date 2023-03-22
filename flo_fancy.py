@@ -23,6 +23,25 @@ def inv_small(x, ref = 1):
     x_[id_small] = 1/x[id_small]
     return(x_)
 
+def lin_or_logspace(x, N = 1000, show_ratio = False):
+    '''
+    checks if data is distributed log or lin
+    '''
+    if min(x) > 0:
+        x_ = np.sort(x)
+        linlog = (
+            len(np.unique(np.round(np.log(np.diff(x_)))))/
+            len(np.unique(np.round(np.log(np.diff(np.log(x_))))))
+        )
+        if show_ratio is True:
+            print(linlog)
+        if linlog > 1:
+            return(np.logspace(np.log10(min(x)), np.log10(max(x)), N))
+    elif show_ratio is True:
+        print("negative numbers found, using linscale")
+    # fallback to linspace
+    return(np.linspace(min(x), max(x), N))
+    
 
 
 def enumezip(*args):

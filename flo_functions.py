@@ -18,6 +18,7 @@ def get_default_args(func):
 class fit_function:
     def __init__(self, f, f_p0,
         description = "",
+        sf = False,
         short_description = "",
         parameters = None, parameters_tex = None,
         formula = "", formula_tex = None,
@@ -25,12 +26,15 @@ class fit_function:
     ):
         self.f = f
         self.p0 = f_p0
+        self.sf = sf
         self.description = description
         self.short_description = short_description
         self.s = short_description
         self.__name__ = f.__name__
         self.__doc__ = docstring
         
+        
+          
         
         if parameters is None:
             raise ValueError("parmaters for function not given! use ")
@@ -72,11 +76,18 @@ def fit(
     units = None,
     color = None,
     label = "fit: ",
+    show_fit_result = True,
     show_gof = True,
     show_f = False,
     verbose = False,
     kwargs_curvefit = None,
-    kwargs_plot = None):
+    kwargs_plot = None,
+    return_cov = False,
+    scale_plot = 1,
+    absolute_sigma = True,
+    xp = True,
+    show_fit_uncertainty = False,
+):
     
     
     if not isinstance(f, fit_function):
@@ -91,6 +102,8 @@ def fit(
         if clean_input is True:
             x, y, sigma = clean(x, y, sigma)
         
+        if sigma is None:
+            absolute_sigma = False
         
         if p0 is True:
             p0 = np.array(f.p0(x, y))
@@ -102,7 +115,7 @@ def fit(
                 f.f, 
                 x, y,
                 sigma=sigma,
-                absolute_sigma=True,
+                absolute_sigma=absolute_sigma,
                 p0 = p0,
                 full_output = True,
                 **kwargs_curvefit
@@ -121,28 +134,47 @@ def fit(
                 print("\33[31mWarning: found infinite covariance matrix, fitting again with p0 = fit + .1\33[0m")
                 p0 = fit + .1
 
+        try:
+            if sigma is not None:
+                chi2 = chi_sqr(f, x, y, sigma, *fit)
+                chi_str = f" {chi2[4]}"
+            else:
+                chi2 = res_sqr(f, x, y, *fit)
+                chi_str = f" {chi2[4]}"
+        except ZeroDivisionError:
+            print("\33[31mwarning: division by zero, chi2/residual dont make sense\33[0m")
+            chi2 = [0,0,0,"", ""]
+            show_gof = False
+            chi_str = ""
         
-        if sigma is not None:
-            chi2 = chi_sqr(f, x, y, sigma, *fit)
-            chi_str = f" {chi2[4]}"
-        else:
-            chi2 = res_sqr(f, x, y, *fit)
-            chi_str = f" {chi2[4]}"
         if show_gof is False:
             chi_str = ""
         if isinstance(ax, plt.Axes):
-            xp = np.linspace(min(x), max(x), 1000)
-            yf = f(xp, *fit)
+            # figure out whether the data is lin or log
+            
+            
+            if xp is True:
+                xp = lin_or_logspace(x, 1000)
+            yf = scale_plot*f(xp, *fit)
             color = ax.plot(xp, yf, label = f"{label}{chi_str}", color = color, **kwargs_plot)[0].get_color()
+            
+            if (show_fit_uncertainty is True) and callable(f.sf):
+                s_yf = f.sf(xp, *fit, cov = cov)
+                ax.fill_between(xp, yf-s_yf, yf+s_yf, color = color, alpha = .2)
+            
             
             if show_f is True:
                 addlabel(ax, f)
             
             if units is None:
                 units = [""]*len(f)
-            add_fit_parameters(ax, f, fit, sfit, units)
+            if show_fit_result is True:
+                add_fit_parameters(ax, f, fit, sfit, units)
 
-        return(fit, sfit, chi2)
+        if return_cov is True:
+            return(fit, cov, chi2)
+        else:
+            return(fit, sfit, chi2)
     except Exception as e:
         print(e)
         return(False)
@@ -157,10 +189,15 @@ def add_fits_result_to_df(df, f, fit_result, dict_append = None):
     if not isinstance(dict_append, dict):
         dict_append = {}
     
+    out = {**dict_append}
     
-    fit, sfit, chi2 = fit_result
-    out = {"chi2": chi2[2], **dict_append}
-    for p, v, sv in zip(f, fit, sfit):
+    if len(fit_result) == 3:
+        fit, sfit, chi2 = fit_result
+    if len(fit_result) == 4:
+        fit, sfit, chi2, cov = fit_result
+        out["cov"] = cov
+    out["chi2"] = chi2[2]
+    for p, v, sv in zip(f.parameters, fit, sfit):
         out[f"result_{p}"] = v
         out[f"result_s{p}"] = sv
     df = df.append(out, ignore_index = True)
@@ -199,8 +236,23 @@ def f_p0_poly_1(x, y):
     x_, y_ = clean(x, y)
     return(np.polyfit(x_, y_, deg = 1))
     
+def f_spoly_1(x, m, c, sfit = False, cov = False):
+    if (sfit is False) and (cov is False):
+        print("\33[31mno uncertaintys given for f_spoly_1 (set either sfit or cov)\33[0m")
+        return(np.zeros_like(x))
+    if (cov is False):
+        cov_ = 0
+    else: 
+        cov_ = cov[0,1]
+    if (sfit is False):
+        sm, sc = np.diag(cov)**.5
+    else:
+        sm, sc = sfit
+    return((sm**2 * x**2 + sc**2 + 2*cov_*x)**.5)
+
 poly_1 = fit_function(
     f = f_poly_1,
+    sf = f_spoly_1,
     f_p0 = f_p0_poly_1,
     description = "first order polynomial",
     short_description = "lin + c",
@@ -210,6 +262,8 @@ poly_1 = fit_function(
     formula_tex = "$m x + c$",
     docstring = ''''''
 ) 
+
+
 
 # second order polynomial
 def f_poly_2(x, a2, a1, a0):
@@ -232,6 +286,34 @@ poly_2 = fit_function(
 ) 
 
 
+
+def f_parabola(x, mu, a, c):
+    return(a*(x-mu)**2+c)
+
+def f_p0_parabola(x, y):
+    a2, a1, a0 = np.polyfit(x, y, 2)
+    a = a2
+    mu = -a1/(2*a2)
+    c = a0 - a2 * mu**2    
+    return(mu, a, c)
+    
+    
+parabola = fit_function(
+    f = f_parabola,
+    f_p0 = f_p0_parabola,
+    description = "barbolic fit with mu as high/low point instead of default polynomial",
+    short_description = "parabolic fit",
+    parameters = ["mu, a", "c"],
+    parameters_tex = ["\\mu", "a", "c"],
+    formula = "a*(x-mu)**2+c",
+    formula_tex = "$a(x-\\mu)^2+c$",
+    docstring = ''''''
+) 
+
+
+
+
+
 # exponential decay with constant
 def f_exp_decayC(t, A, tau, C):
     return(A*np.exp(-t/tau)+C)
@@ -239,8 +321,12 @@ def f_exp_decayC(t, A, tau, C):
 def f_p0_exp_decayC(x, y, tau_lit = 1):
     return([y[0]/f_exp_decayC(x[0], 1, tau_lit,0), tau_lit, 0])
 
+
+
+
 exp_decayC = fit_function(
     f = f_exp_decayC,
+
     f_p0 = f_p0_exp_decayC,
     description = "exponential decay with constant term",
     short_description = "decay+C",
@@ -263,15 +349,40 @@ def f_exp_decay(t, A, tau):
 def f_p0_exp_decay(x, y, tau_lit = 1):
     return([y[0]/f_exp_decayC(x[0], 1, tau_lit, 0), tau_lit])
 
+
+
+def f_sexp_decay(t, A, tau, sfit = False, cov = False):
+    if (sfit is False) and (cov is False):
+        print("\33[31mno uncertaintys given for f_sexp_decay (set either sfit or cov)\33[0m")
+        return(np.zeros_like(x))
+    if (cov is False):
+        cov_ = 0
+    else: 
+        cov_ = cov[0,1]
+    if (sfit is False):
+        sA, stau = np.diag(cov)**.5
+    else:
+        sA, stau = sfit
+        
+    
+    return(
+        (
+              (sA   * np.exp(-t/tau))**2
+            + (stau * A * t / tau**2 * np.exp(-t/tau))**2
+            + (2 * np.exp(-t/tau) * A * t / tau**2 * np.exp(-t/tau) * cov_)
+        )**.5
+    )
+
 exp_decay = fit_function(
     f = f_exp_decay,
+    sf = f_sexp_decay,
     f_p0 = f_p0_exp_decay,
     description = "exponential decay",
     short_description = "decay",
     parameters = ["A", "tau"],
     parameters_tex = ["A", "\\tau"],
-    formula = "A exp(t / tau)",
-    formula_tex = "$A \\cdot \\exp{{( t / \\tau)}}$",
+    formula = "A exp(-t / tau)",
+    formula_tex = "$A \\cdot \\exp{{(-t / \\tau)}}$",
     docstring = '''
 An exponential decay that coverges to zero
 
@@ -449,7 +560,7 @@ usage: y = sigmoid(x; mu, sigma, y1, y0, a)
 # gauss function
 def f_gauss(x, A=1, mu=0, sigma=1):
     return(
-        A * np.exp(-(np.array(x)-mu)**2 / (2* sigma**2))
+        A * np.exp(-(np.array(x)-mu)**2 / (2 * sigma**2))
     )
 def f_p0_gauss(x, y):
     A = max(y)
@@ -469,17 +580,17 @@ gauss = fit_function(
     short_description  = "gauss function", 
     parameters = ["A", "mu", "sigma"],
     parameters_tex = ["A", "\\mu", "\\sigma"],
-    formula = "A exp(-(x-mu)^2 /(2 sigma)^2)",
-    formula_tex = "$A \\exp{{\\frac{{-(x-\\mu)^2}}{{(2 \\sigma)^2}}}}$",
+    formula = "A exp(-(x-mu)^2 /(2 sigma^2))",
+    formula_tex = "$A \\exp{{\\frac{{-(x-\\mu)^2}}{{2 \\sigma^2}}}}$",
 )
 
 # doublegauss function
-def gaus2(x, A1=1, mu1=0, sigma1=1, A2=1, mu2=0, sigma2=1):
+def f_gauss2(x, A1=1, mu1=0, sigma1=1, A2=1, mu2=0, sigma2=1):
     return(
           A1 * np.exp(-(np.array(x)-mu1)**2 / (2*sigma1**2))
         + A2 * np.exp(-(np.array(x)-mu2)**2 / (2*sigma2**2))
     )
-def f_p0_gaus2(x, y):
+def f_p0_gauss2(x, y):
     
     A1 = max(y)
     A2 = max(y)
@@ -494,8 +605,8 @@ def f_p0_gaus2(x, y):
     
     
 gauss2 = fit_function(
-    f = gaus2,
-    f_p0 = f_p0_gaus2,
+    f = f_gauss2,
+    f_p0 = f_p0_gauss2,
     description = "sum of two gaus functions without a constant term",
     short_description  = "double gauss",
     parameters = ["A1", "mu1", "sigma1", "A2", "mu2", "sigma2"],
@@ -597,4 +708,27 @@ normal = fit_function(
     formula = "1/(σ √(2 π)) gauss(x;µ,σ)",
     formula_tex = "$\\frac{1}{\\sigma \\sqrt{{2 \\pi}}} \\exp{{-\\frac{{x-\\mu}}{{2\\sigma}}^2}}$",
 )
+    
+    
+
+
+# diffusion function
+def f_diffusion(t, D = .5, w_0 = 0):
+    return(
+        (2 * D * t + w_0**2)**.5 
+    )
+def f_p0_diffusion(t, w):
+    return(np.median(w**2 / t)/2, 0)
+    
+diffusion  = fit_function(
+    f = f_diffusion,
+    f_p0 = f_p0_diffusion,
+    description = "Diffusion formula w = √(2Dt+w0)",
+    short_description = "",
+    parameters = ["D", "w0"],
+    parameters_tex = ["D", "w_0"],
+    formula = "√(2D t+w_0)",
+    formula_tex = "$\\sqrt{2 D\ t+w_0**2}$",
+)
+    
     
