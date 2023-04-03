@@ -86,7 +86,7 @@ def add_fit_parameter(ax, l, p, sp=None, unit="", unit_tex="", fmt="auto"):
     
     '''
     
-    str_value = tex_value(p, sp, unit = unit, unit_tex = unit_tex)
+    str_value = tex_value(x = p, sx = sp, unit = unit, unit_tex = unit_tex)
     str_ = f"${l}: {str_value}$"
     
     addlabel(ax, str_)
@@ -102,7 +102,8 @@ def add_fit_parameters(ax, pars, fit, sfit = False, units = False, **kwargs):
     if units is False:
         units = [""]*len(pars)
     for par, v, sv, u in zip(pars, fit, sfit, units):
-        add_fit_parameter(ax, par, v, sv, u, **kwargs)
+        if isinstance(u, str): 
+            add_fit_parameter(ax, l = par, p = v, sp = sv, unit = u, **kwargs)
 
 
     
@@ -158,42 +159,62 @@ def get_exp(x, digits = 2):
 
 
 
-def tex_value(x, sx = None, unit = "", lim = 5, digits = 2, unit_tex = "", zero_lim = -8):
+def tex_value(x, sx = None, unit = "", max_exp_diff = 4, lim = (-2,3), digits = 1, unit_tex = "", zero_lim = -8, v = False):
     bool_bracket = [False, False]
     str_x = str_sx = str_exp = str_unit = str_unit = str_brl =  str_brr = ""
+    
+    
+    if isinstance(sx, str):
+        sx = None
     
     
     exp_x = get_exp(x, digits = digits)
     exp_sx = get_exp(sx, digits = digits)
     exp = False
     
+    qp(f"\n exp_x:  {exp_x}", verbose = v)
+    qp(f"\n exp_sx: {exp_sx}", verbose = v)
     
     if (exp_sx > exp_x) and (exp_x < zero_lim) and (sx is not None) and np.isfinite(sx):
         exp_x = exp_sx
+        qp("\n set exp_x to exp_sx", verbose = v)
+    elif (exp_x):
+        exp_x = 0
         
     
-    if np.abs(exp_x - exp_sx) <= digits+1 :
+    if np.abs(exp_x - exp_sx) < max_exp_diff:
         # numbers are close
-        exp = int(np.max([exp_x, exp_sx]))
-        if np.abs(exp) <= digits:
+        qp("\n  numbers are close: ", verbose=v)
+        exp = int(np.min([exp_x, exp_sx]))
+        qp(f"\n  lim[0] < exp < lim[1]: {lim[0] < exp < lim[1]}", verbose=v)
+        if lim[0] < exp < lim[1]:
             exp = 0
-        if (exp > 0) and (exp <= lim):
-            digits = np.max([digits - exp, 0])
-            exp = 0
-            
+        qp(f"\n  exp: {exp}", verbose=v)
         
         x = x*10**(-exp)
-        sx = sx*10**(-exp)
         str_x = tex_number_exp(x, 0, digits = digits)
-        str_sx = tex_number_exp(sx, 0, digits = digits, prefix = "\\pm")
+        
+        if sx is not None:
+            sx = sx*10**(-exp)
+            str_sx = tex_number_exp(sx, 0, digits = digits, prefix = "\\pm")
         
         if exp != 0:
             str_exp = f"\\cdot 10^{{{int(exp)}}}"
     else:
+        qp("\n  numbers are not close: ", verbose=v)
+        if lim[0] < exp_x < lim[1]:
+            exp_x = 0
         str_x = tex_number_exp(x, exp = exp_x, digits = digits)
-        str_sx = tex_number_exp(sx, exp_sx, digits = digits, prefix = "\\pm")
+        if sx is not None:
+            if lim[0] < exp_sx < lim[1]:
+                exp_sx = 0
+            str_sx = tex_number_exp(sx, exp_sx, digits = digits, prefix = "\\pm")
         
-
+    if sx is None:
+        str_sx = ""
+    
+    
+    
     if str_sx != "":
         bool_bracket[0] = True
     if str_exp != "":
@@ -212,9 +233,16 @@ def tex_value(x, sx = None, unit = "", lim = 5, digits = 2, unit_tex = "", zero_
 
     out = f"{str_brl}{str_x}{str_sx}{str_brr}{str_exp}{str_unit}"
     return(out)
-
-
-
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 def get_nice_format(*x):
     '''

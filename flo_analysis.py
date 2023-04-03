@@ -1206,28 +1206,53 @@ def plot_signals(data, fname = False, title = ""):
         
         
         
-        
-        
-        
-        
-        
-def doke_plot(
+
+
+def get_doke_df_from_ds(
     ds,
-    ax = False,
     Energys = True,
     field_ids = True,
-    w = 13.7,
     field = "areas_corrected",
-    label = "$^{{83}}$Kr: ",
-    zoom = False,
-    show_spread = False,
+    label_prefix = "$^{{83}}$Kr: ",
+    label_suffix = "",
+    doke_df = False,
+):
+    if Energys is True:
+        Energys = [9.4053, 32.1516, 41.5569] # keV
+    if field_ids is True:
+        field_ids = [(1,3), (0,2)]#, (6,7)]
     
+    
+    if not isinstance(doke_df, pd.DataFrame):
+        doke_df = pd.DataFrame()
+    for E, fids in zip(Energys, field_ids):
+        signals = ds[field][:, fids]
+        s1, s2 = signals[:,0], signals[:,1]
+
+        x, spr_x, sx = fhist.median_gauss(s1/E, strict_positive=True)
+        y, spr_y, sy = fhist.median_gauss(s2/E, strict_positive=True)
+
+
+        doke_df = doke_df.append(
+            {
+                "S1": x,
+                "S2": y,
+                "sS1": sx,
+                "sS2": sy,
+                "E": E,
+                "label": f"{label_prefix}{E:.1f} keV{label_suffix}",
+            },
+            ignore_index = True
+        )
+    return(doke_df)
+
+
+def doke_df_plot(
+    ax,
+    doke_df,
 ):
     
     '''
-    TODO:
-        separate this into get_doke_df_from_ds
-    
     takes summary dataset and returns g1, g2, sg1, sg2
     
     parameters:
@@ -1247,99 +1272,40 @@ def doke_plot(
           show spread (False): show also spread of median (faint)
     
     '''
-    if Energys is True:
-        Energys = [9.4053, 32.1516, 41.5569] # keV
-    if field_ids is True:
-        field_ids = [(1,3), (0,2)]#, (6,7)]
     
+    if not isinstance(ax, plt.Axes):
+        ax, doke_df = doke_df, ax
     
-    result_df = pd.DataFrame()
-    for E, fids in zip(Energys, field_ids):
-        signals = ds[field][:, fids]
-        s1, s2 = signals[:,0], signals[:,1]
-        x, spr_x, sx = fhist.median_gauss(s1/E, strict_positive=True)
-        y, spr_y, sy = fhist.median_gauss(s2/E, strict_positive=True)
-        
-        if isinstance(ax, plt.Axes):
-            color = fhist.errorbar(
-                ax,
-                x, y, sy,
-                sx = sx, plot = True,
-                label = f"{label}{E:.1f} keV",
-                marker = ".",
-                capsize = 0
-            )
-            if show_spread is True:
-                fhist.errorbar(
-                    ax,
-                    x, y, spr_y,
-                    sx = spr_x,
-                    alpha = .1,
-                    color = color,
-                )
-        result_df = result_df.append(
-            {
-                "S1": x,
-                "S2": y,
-                "sS1": sx,
-                "sS2": sy,
-            },
-            ignore_index = True
+    if "label" not in doke_df:
+        doke_df["label"] = ""
+    for i_row, row in doke_df.iterrows():
+
+        color = fhist.errorbar(
+            ax,
+            row["S1"], row["S2"], row["sS2"],
+            sx = row["sS2"], plot = True,
+            label = row["label"],
+            marker = ".",
+            capsize = 0
         )
 
 
 
-    f_fit = ff.poly_1
-    fit_res = ff.fit(
-        f_fit, result_df["S1"], result_df["S2"], result_df["sS2"],
-        label = "",
-        return_cov = True,
-    )
-    fit, cov, chi2 = fit_res
-    g1, g2, sg1, sg2 = get_g1g2(*fit, cov)
-
-
-    if isinstance(ax, plt.Axes):
-        
-        if zoom is True:
-            xp = np.linspace(*ax.get_xlim(), 1000)
-        else:
-            xp = np.linspace(0, -fit[1]/fit[0], 1000)
-        yf = f_fit(xp, *fit)
-        ax.plot(xp, yf, color = "green", alpha = .2)
-        add_fit_parameters(ax, f_fit, fit, np.diag(cov)**.5, units = ["", "PE/keV"])
-
-        addlabel(ax, f"$g_1: {tex_value(g1, sg1, 'PE/γ')}$")
-        addlabel(ax, f"$g_2: {tex_value(g2, sg2, 'PE/e')}$")
-
-        ax.set_xlabel("S1/E / PE/keV")
-        ax.set_ylabel("S2/E / PE/keV")
-
-
-        ax.legend(fontsize = 8, loc = "upper right")
-
-
-
-
-
-    return(g1, g2, sg1, sg2)
-
-
-
-
-def g1f2_from_doke_df(doke_df, ax = False, W = 13.7, label = "$^{{83}}$Kr: ", f_fit = ff.poly_1, zoom = False, show_fit_result = False, show_fit_uncertainty = False, color = "green"):
-    x, y, sx, sy = doke_df["x"], doke_df["y"], doke_df["sx"], doke_df["sy"]
-    
-    if isinstance(ax, plt.Axes):
-        for row in doke_df.to_dict(orient = "records"):
-            label = ""
-            if "label" in row:
-                label = f"{row['label']} "
-                            
-            fhist.errorbar(ax, row["x"], row["y"], row["sy"], sx = row["sx"], label = f"{label}{row['E']:.1f} keV", plot = True)
+def g1f2_from_doke_df(
+    doke_df,
+    ax = False,
+    W = 13.7,
+    f_fit = ff.poly_1,
+    color = "black",
+    ODR = True,
+    label = None,
+    show_fit_result = False,
+    plot_doke = True,
+):
+    x, y, sx, sy = doke_df["S1"], doke_df["S2"], doke_df["sS1"], doke_df["sS2"]
     
     
-    fit_res = ff.fit(f_fit, x, y, sy, return_cov = True)
+    fit_res = ff.fit(f_fit, x, y, sy, sx = sx, return_cov = True, ODR = ODR)
     fit, cov, _ = fit_res
     
     
@@ -1350,23 +1316,25 @@ def g1f2_from_doke_df(doke_df, ax = False, W = 13.7, label = "$^{{83}}$Kr: ", f_
     
     
     if isinstance(ax, plt.Axes):
+        if plot_doke is True:
+            doke_df_plot(ax, doke_df)
+        
         ax.set_xlabel("S1/E / PE/keV")
         ax.set_ylabel("S2/E / PE/keV")
 
-        if zoom is True:
-            xp = np.linspace(*ax.get_xlim(), 1000)
-        else:
-            xp = np.linspace(0, -fit[1]/fit[0], 1000)
-
+        xp = np.linspace(*ax.get_xlim(), 1000)
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
         yf = f_fit(xp, *fit)
         
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
         
-        if (show_fit_uncertainty is True) and callable(f_fit.sf):
+        ax.plot(xp, yf, color = color, alpha = .5, label = label, linewidth = 1)
+        if callable(f_fit.sf):
             s_yf = f_fit.sf(xp, *fit, cov = cov)
-            ax.plot([], color = color, alpha = .2, label = "fit")
             ax.fill_between(xp, yf-s_yf, yf+s_yf, color = color, alpha = .2)
-        else:
-            ax.plot(xp, yf, color = color, alpha = .2, label = "fit", linewidth = 1)
+        
         
         
         if show_fit_result is True:
@@ -1380,3 +1348,4 @@ def g1f2_from_doke_df(doke_df, ax = False, W = 13.7, label = "$^{{83}}$Kr: ", f_
     return(g1, g2, sg1, sg2)
                  
     
+

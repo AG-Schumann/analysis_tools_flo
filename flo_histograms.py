@@ -268,6 +268,7 @@ def ax2(*labs, reminder = True, **kwargs):
 
 def fax(ax_, ax2):
     ax_.set_axis_off()
+    ax2.set_xlim(ax_.get_xlim())
     ax2.set_ylim(ax_.get_ylim())
     
 
@@ -630,10 +631,10 @@ def s_pois(counts, rng = .682, return_range = False):
     low[counts_ == 0] = 0.0
     
     if return_range is True:
-        return(low, high)
+        return(np.array([low, high]))
     
     
-    return(counts_ - low, high - counts_)
+    return(np.array([counts_ - low, high - counts_]))
     
 
 
@@ -739,6 +740,42 @@ def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=10, path
                 plt.close()
             
     return(df)
+
+
+
+
+def draw_counts(ax, bc, counts, draw_unc = True, color = None, normalize = True, label = "", skip_zero = True, y_offset = 0):
+    if not isinstance(ax, plt.Axes):
+        raise TypeError("ax must be of type plt.Axes")
+
+    if draw_unc is True:
+        s_counts = s_pois(counts)
+    else:
+        s_counts = 0
+    
+    n_tot = np.sum(counts)
+    if n_tot == 0:
+        if skip_zero is True:
+            return(0)
+        else:
+            raise ValueError("no counts found")
+    
+    
+    if normalize is True:
+        counts_plot = counts/n_tot
+        s_counts_plot = s_counts / n_tot
+        y_offset = y_offset/n_tot
+    else:
+        counts_plot = counts
+        s_counts_plot = s_counts
+    
+    counts_plot += y_offset
+    
+    color = ax.plot(bc, counts_plot, drawstyle = "steps-mid", label = f"{label}", color = color)[0].get_color()
+    if draw_unc is True:
+        ax.fill_between(bc, counts_plot-s_counts_plot[0], counts_plot+s_counts_plot[1], step = "mid", alpha = .2, color = color)
+
+
 
 
 

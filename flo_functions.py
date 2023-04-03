@@ -4,6 +4,7 @@ import pandas as pd
 import inspect
 from flo_fancy import *
 from scipy.optimize import curve_fit
+from scipy import odr
 import scipy
 
 
@@ -70,6 +71,7 @@ class fit_function:
 
 def fit(
     f, x, y, sigma = None,
+    sx = None, 
     p0 = True,
     ax = False,
     clean_input = True,
@@ -83,12 +85,14 @@ def fit(
     kwargs_curvefit = None,
     kwargs_plot = None,
     return_cov = False,
+    return_output = False,
     scale_plot = 1,
     absolute_sigma = True,
     xp = True,
     show_fit_uncertainty = False,
+    ODR = False,
 ):
-    
+    output = False
     
     if not isinstance(f, fit_function):
         return(False)
@@ -110,29 +114,46 @@ def fit(
         elif p0 is False:
             p0 = None
         
-        for i in range(2):
-            fit, cov, *output = curve_fit(
-                f.f, 
-                x, y,
-                sigma=sigma,
-                absolute_sigma=absolute_sigma,
-                p0 = p0,
-                full_output = True,
-                **kwargs_curvefit
-            )
-            # sometimes good starting parameters yield infinite covariance matrix..... urgh
+        if (ODR is True):
+            if (sx is None):
+                raise ValueError("sx is not given for ODR")
+            if (sigma is None):
+                raise ValueError("sigma is not given for ODR")
+                
+            if verbose is True: print("using ODR")
+            lf = lambda beta, x: f(x, *beta)
+            model = odr.Model(lf)
+            data = odr.RealData(x, y, sx = sx, sy = sigma)
+            myodr = odr.ODR(data, model, beta0 = p0)
+            output = myodr.run()
+
+            fit = output.beta
+            cov = output.cov_beta
             sfit = np.diag(cov)**.5
-            if verbose is True:
-                nev = output[0]["nfev"]
-                print(f"fit {i+1} ({nev} iterations)")
-                for p, v, sv in zip(f.parameters, fit, sfit):
-                    print(f"{p:>{f.plen}}: {v:12.4g} ±{sv:12.4g}")
-            
-            if np.inf not in cov:
-                break
-            elif i == 0:
-                print("\33[31mWarning: found infinite covariance matrix, fitting again with p0 = fit + .1\33[0m")
-                p0 = fit + .1
+        else:
+            for i in range(2):
+                fit, cov, *output = curve_fit(
+                    f.f, 
+                    x, y,
+                    sigma=sigma,
+                    absolute_sigma=absolute_sigma,
+                    p0 = p0,
+                    full_output = True,
+                    **kwargs_curvefit
+                )
+                # sometimes good starting parameters yield infinite covariance matrix..... urgh
+                sfit = np.diag(cov)**.5
+                if verbose is True:
+                    nev = output[0]["nfev"]
+                    print(f"fit {i+1} ({nev} iterations)")
+                    for p, v, sv in zip(f.parameters, fit, sfit):
+                        print(f"{p:>{f.plen}}: {v:12.4g} ±{sv:12.4g}")
+                
+                if np.inf not in cov:
+                    break
+                elif i == 0:
+                    if verbose is True: print("\33[31mWarning: found infinite covariance matrix, fitting again with p0 = fit + .1\33[0m")
+                    p0 = fit + .1
 
         try:
             if sigma is not None:
@@ -142,7 +163,7 @@ def fit(
                 chi2 = res_sqr(f, x, y, *fit)
                 chi_str = f" {chi2[4]}"
         except ZeroDivisionError:
-            print("\33[31mwarning: division by zero, chi2/residual dont make sense\33[0m")
+            if verbose is True: print("\33[31mwarning: division by zero, chi2/residual dont make sense\33[0m")
             chi2 = [0,0,0,"", ""]
             show_gof = False
             chi_str = ""
@@ -170,11 +191,20 @@ def fit(
                 units = [""]*len(f)
             if show_fit_result is True:
                 add_fit_parameters(ax, f, fit, sfit, units)
+        
+        
+        out = [fit, sfit, chi2, output]
+
 
         if return_cov is True:
-            return(fit, cov, chi2)
-        else:
-            return(fit, sfit, chi2)
+            out[1] = cov
+        
+        if return_output is not True:
+            out = out[:3]
+
+            
+        return(out)
+            
     except Exception as e:
         print(e)
         return(False)
@@ -718,17 +748,17 @@ def f_diffusion(t, D = .5, w_0 = 0):
         (2 * D * t + w_0**2)**.5 
     )
 def f_p0_diffusion(t, w):
-    return(np.median(w**2 / t)/2, 0)
+    return(np.median(w**2 / t)/2, np.min(w))
     
 diffusion  = fit_function(
     f = f_diffusion,
     f_p0 = f_p0_diffusion,
-    description = "Diffusion formula w = √(2Dt+w0)",
+    description = "Diffusion formula w = √(2Dt+w0²)",
     short_description = "",
     parameters = ["D", "w0"],
     parameters_tex = ["D", "w_0"],
-    formula = "√(2D t+w_0)",
-    formula_tex = "$\\sqrt{2 D\ t+w_0**2}$",
+    formula = "√(2D t+w_0²)",
+    formula_tex = "$\\sqrt{2 D\ t+w_0^2}$",
 )
     
     
