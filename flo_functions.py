@@ -91,49 +91,96 @@ def fit(
     xp = True,
     show_fit_uncertainty = False,
     ODR = False,
+    fixed_values = None
 ):
     output = False
     
     if not isinstance(f, fit_function):
+        qp("f is not a fit function", verbose = verbose, end = "\n")
         return(False)
+    qp(f"\33[35musing {f} for fit\33[0m", verbose = verbose, end = "\n")
+    
+    if fixed_values is None:
+        fixed_values = dict()
+        qp("- no fixed values given", verbose = verbose, end = "\n")
+    
+    
     try:
         if not isinstance(kwargs_curvefit, dict):
+            qp("- kwargs_curvefit not provided", verbose = verbose, end = "\n")
             kwargs_curvefit = {}
         if not isinstance(kwargs_plot, dict):
+            qp("- kwargs_plot not provided", verbose = verbose, end = "\n")
             kwargs_plot = {}
         
+        params_all = f.parameters.copy()
+        params = params_all.copy()
+        params_tex = f.parameters_tex.copy()
         
-        if clean_input is True:
-            x, y, sigma = clean(x, y, sigma)
-        
-        if sigma is None:
-            absolute_sigma = False
         
         if p0 is True:
-            p0 = np.array(f.p0(x, y))
+            qp(f"- calculating p0", verbose = verbose, end = "\n")
+            p0 = np.array(f.p0(x, y, **fixed_values))
+            
+            for p, v in zip(params_all, p0):
+                qp(f"  * {p}: {v}", verbose = verbose, end = "\n")
         elif p0 is False:
             p0 = None
         
+        
+        
+        qp("- setting up f and its parameters", verbose = verbose, end = "\n")
+        f_fit = lambda x, *args: f.f(x, *args, **fixed_values)
+        
+        qp(f"- len(p0): {len(p0)}", verbose = verbose, end = "\n")
+        for par, v in fixed_values.items():
+            qp(f"  * removing {par} (fixed to {v})", verbose = verbose, end = "\n")
+            id_par = params.index(par)
+            _ = params.pop(id_par)
+            _ = params_tex.pop(id_par)
+            if p0 is not None:
+                p0 = np.delete(p0, id_par)
+        qp(f"- len(p0): {len(p0)}", verbose = verbose, end = "\n")
+        
+        if clean_input is True:
+            qp(f"- cleaning data", verbose = verbose, end = "\n")
+            x, y, sigma = clean(x, y, sigma)
+        
+        if sigma is None:
+            qp(f"- no sy given", verbose = verbose, end = "\n")
+            absolute_sigma = False
+        
+        
+        
+        # the actual fits 
         if (ODR is True):
+            qp(f"- ODR: testing", verbose = verbose, end = "\n")
             if (sx is None):
                 raise ValueError("sx is not given for ODR")
             if (sigma is None):
                 raise ValueError("sigma is not given for ODR")
-                
-            if verbose is True: print("using ODR")
-            lf = lambda beta, x: f(x, *beta)
+            qp(f"- ODR: tests passed", verbose = verbose, end = "\n")
+            
+            qp(f"- ODR: rebuilding f", verbose = verbose, end = "\n")
+            lf = lambda beta, x: f_fit(x, *beta)
+            qp(f"- ODR: creating model", verbose = verbose, end = "\n")
             model = odr.Model(lf)
+            qp(f"- ODR: creating data", verbose = verbose, end = "\n")
             data = odr.RealData(x, y, sx = sx, sy = sigma)
+            qp(f"- ODR: creating ODR", verbose = verbose, end = "\n")
             myodr = odr.ODR(data, model, beta0 = p0)
+            qp(f"- ODR: fitting", verbose = verbose, end = "\n")
             output = myodr.run()
-
+            qp(f"- ODR: fitting done", verbose = verbose, end = "\n")
+            
             fit = output.beta
             cov = output.cov_beta
             sfit = np.diag(cov)**.5
         else:
             for i in range(2):
+                qp(f"- fitting {i}", verbose = verbose, end = "\n")
                 fit, cov, *output = curve_fit(
-                    f.f, 
+                    f_fit, 
                     x, y,
                     sigma=sigma,
                     absolute_sigma=absolute_sigma,
@@ -146,7 +193,7 @@ def fit(
                 if verbose is True:
                     nev = output[0]["nfev"]
                     print(f"fit {i+1} ({nev} iterations)")
-                    for p, v, sv in zip(f.parameters, fit, sfit):
+                    for p, v, sv in zip(params, fit, sfit):
                         print(f"{p:>{f.plen}}: {v:12.4g} ±{sv:12.4g}")
                 
                 if np.inf not in cov:
@@ -157,13 +204,16 @@ def fit(
 
         try:
             if sigma is not None:
-                chi2 = chi_sqr(f, x, y, sigma, *fit)
+                qp(f"- calculating chi^2", verbose = verbose, end = "\n")
+                chi2 = chi_sqr(f_fit, x, y, sigma, *fit)
                 chi_str = f" {chi2[4]}"
             else:
-                chi2 = res_sqr(f, x, y, *fit)
+                qp(f"- calculating residuals^2", verbose = verbose, end = "\n")
+                chi2 = res_sqr(f_fit, x, y, *fit)
                 chi_str = f" {chi2[4]}"
         except ZeroDivisionError:
-            if verbose is True: print("\33[31mwarning: division by zero, chi2/residual dont make sense\33[0m")
+            qp(f"- \33[31mwarning: division by zero, chi2/residual dont make sense\33[0m", verbose = verbose, end = "\n")
+            
             chi2 = [0,0,0,"", ""]
             show_gof = False
             chi_str = ""
@@ -176,39 +226,47 @@ def fit(
             
             if xp is True:
                 xp = lin_or_logspace(x, 1000)
-            yf = scale_plot*f(xp, *fit)
+            qp(f"- calculating fit curve", verbose = verbose, end = "\n")
+            yf = scale_plot*f_fit(xp, *fit)
             color = ax.plot(xp, yf, label = f"{label}{chi_str}", color = color, **kwargs_plot)[0].get_color()
             
             if (show_fit_uncertainty is True) and callable(f.sf):
-                s_yf = f.sf(xp, *fit, cov = cov)
+                qp(f"- showing fit curve uncertainty", verbose = verbose, end = "\n")
+                s_yf = f.sf(xp, *fit, **fixed_values, cov = cov)
                 ax.fill_between(xp, yf-s_yf, yf+s_yf, color = color, alpha = .2)
             
             
             if show_f is True:
+                qp(f"- adding description of f", verbose = verbose, end = "\n")
                 addlabel(ax, f)
             
             if units is None:
-                units = [""]*len(f)
+                qp(f"- defaulting units", verbose = verbose, end = "\n")
+                units = [""]*len(params)
             if show_fit_result is True:
-                add_fit_parameters(ax, f, fit, sfit, units)
+                qp(f"- adding fit results to plot", verbose = verbose, end = "\n")
+                add_fit_parameters(ax, params_tex, fit, sfit, units)
         
-        
+        qp(f"- preparing output list", verbose = verbose, end = "\n")
         out = [fit, sfit, chi2, output]
 
 
         if return_cov is True:
+            qp(f"- replacing sfit with cov", verbose = verbose, end = "\n")
             out[1] = cov
         
         if return_output is not True:
+            qp(f"- removing full output", verbose = verbose, end = "\n")
             out = out[:3]
 
-            
+        qp(f"- returning all", verbose = verbose, end = "\n")
         return(out)
             
     except Exception as e:
         print(e)
         return(False)
     
+
 
 
 def add_fits_result_to_df(df, f, fit_result, dict_append = None):
@@ -742,23 +800,25 @@ normal = fit_function(
     
 
 
+
 # diffusion function
-def f_diffusion(t, D = .5, w_0 = 0):
+def f_diffusion(t, D, w_0, v_d = 6.9/40_000):
     return(
-        (2 * D * t + w_0**2)**.5 
+        (2 * D/v_d**2 * t + w_0**2)**.5 
     )
-def f_p0_diffusion(t, w):
-    return(np.median(w**2 / t)/2, np.min(w))
+def f_p0_diffusion(t, w, v_d = 6.9/40_000):
+    return(np.median(w**2 / t)/2*v_d**2, np.min(w), v_d)
     
 diffusion  = fit_function(
     f = f_diffusion,
     f_p0 = f_p0_diffusion,
     description = "Diffusion formula w = √(2Dt+w0²)",
     short_description = "",
-    parameters = ["D", "w0"],
-    parameters_tex = ["D", "w_0"],
-    formula = "√(2D t+w_0²)",
-    formula_tex = "$\\sqrt{2 D\ t+w_0^2}$",
+    parameters = ["D", "w0", "v_d"],
+    parameters_tex = ["D", "w_0", "v_\\mathrm{{drift}}"],
+    formula = "√(2D/v_d t+w_0²)",
+    formula_tex = "$\\sqrt{\\frac{{2 D\ t}}{{v_\\mathrm{{drift}}}}+w_0^2}$",
 )
+
     
     
