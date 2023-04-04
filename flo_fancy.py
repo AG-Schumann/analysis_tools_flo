@@ -159,7 +159,7 @@ def get_exp(x, digits = 2):
 
 
 
-def tex_value(x, sx = None, unit = "", max_exp_diff = 4, lim = (-2,3), digits = 1, unit_tex = "", zero_lim = -8, v = False):
+def tex_value(x, sx = None, unit = "", max_exp_diff = 4, lim = (0,0), digits = 1, unit_tex = "", zero_lim = -8, v = False):
     bool_bracket = [False, False]
     str_x = str_sx = str_exp = str_unit = str_unit = str_brl =  str_brr = ""
     

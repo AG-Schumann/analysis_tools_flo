@@ -1228,6 +1228,8 @@ def get_doke_df_from_ds(
     for E, fids in zip(Energys, field_ids):
         signals = ds[field][:, fids]
         s1, s2 = signals[:,0], signals[:,1]
+        
+        _, s1, s2 = fhist.remove_zero((s1 > 0) & (s2 > 0), s1, s2)
 
         x, spr_x, sx = fhist.median_gauss(s1/E, strict_positive=True)
         y, spr_y, sy = fhist.median_gauss(s2/E, strict_positive=True)
@@ -1283,7 +1285,7 @@ def doke_df_plot(
         color = fhist.errorbar(
             ax,
             row["S1"], row["S2"], row["sS2"],
-            sx = row["sS2"], plot = True,
+            sx = row["sS1"], plot = True,
             label = row["label"],
             marker = ".",
             capsize = 0
@@ -1297,15 +1299,16 @@ def g1f2_from_doke_df(
     W = 13.7,
     f_fit = ff.poly_1,
     color = "black",
-    ODR = True,
     label = None,
     show_fit_result = False,
     plot_doke = True,
+    **kwargs,
 ):
-    x, y, sx, sy = doke_df["S1"], doke_df["S2"], doke_df["sS1"], doke_df["sS2"]
+    x, sx = doke_df["S1"], doke_df["sS1"]
+    y, sy = doke_df["S2"], doke_df["sS2"]
     
     
-    fit_res = ff.fit(f_fit, x, y, sy, sx = sx, return_cov = True, ODR = ODR)
+    fit_res = ff.fit(f_fit, x, y, sy, sx = sx, return_cov = True, **kwargs)
     fit, cov, _ = fit_res
     
     
