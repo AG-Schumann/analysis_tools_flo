@@ -159,7 +159,7 @@ def get_exp(x, digits = 2):
 
 
 
-def tex_value(x, sx = None, unit = "", max_exp_diff = 4, lim = (0,0), digits = 1, unit_tex = "", zero_lim = -8, v = False):
+def tex_value(x, sx = None, unit = "", max_exp_diff = 4, lim = (-1,2), digits = 1, unit_tex = "", zero_lim = -8, v = False):
     
     if sx == 0:
         sx = None
@@ -189,7 +189,7 @@ def tex_value(x, sx = None, unit = "", max_exp_diff = 4, lim = (0,0), digits = 1
         qp("\n  numbers are close: ", verbose=v)
         exp = int(np.min([exp_x, exp_sx]))
         qp(f"\n  lim[0] < exp < lim[1]: {lim[0] < exp < lim[1]}", verbose=v)
-        if lim[0] < exp < lim[1]:
+        if lim[0] <= exp <= lim[1]:
             exp = 0
         qp(f"\n  exp: {exp}", verbose=v)
         
@@ -204,14 +204,14 @@ def tex_value(x, sx = None, unit = "", max_exp_diff = 4, lim = (0,0), digits = 1
             str_exp = f"\\cdot 10^{{{int(exp)}}}"
     else:
         qp("\n  numbers are not close: ", verbose=v)
-        if lim[0] < exp_x < lim[1]:
+        if lim[0] <= exp_x <= lim[1]:
             qp(f"\n exp_x within limits: {lim[0]} < {exp_x} < {lim[1]}", verbose=v)
             exp_x = 0
         
         qp(f"\ntex_number_exp({x}, exp = {exp_x}, digits = {digits})", verbose=v)
         str_x = tex_number_exp(x, exp = exp_x, digits = digits)
         if sx is not None:
-            if lim[0] < exp_sx < lim[1]:
+            if lim[0] <= exp_sx <= lim[1]:
                 exp_sx = 0
             str_sx = tex_number_exp(sx, exp_sx, digits = digits, prefix = "\\pm")
         

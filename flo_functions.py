@@ -868,11 +868,11 @@ doke_fit  = fit_function(
     f = f_doke,
     f_p0 = f_p0_doke,
     description = "doke fit",
-    short_description = "",
+    short_description = "doke fit",
     parameters = ["g1", "g2", "W"],
     parameters_tex = ["g_1", "g_2", "W"],
     units = ["PE/γ", "PE/e", "keV/quanta"],
-    formula = "a doke fit",
-    formula_tex = "",
+    formula = "S2 = 1000/W * (S * (W/1000) * (-g2/g1) + g2)",
+    formula_tex = "$S_2 = \\frac{{1000}}{{W}} \\left(S1\\frac{{W}}{{1000}}\\frac{{- g_2}}{{g_1}} +g_2\\right)$",
     
 )
