@@ -160,6 +160,10 @@ def get_exp(x, digits = 2):
 
 
 def tex_value(x, sx = None, unit = "", max_exp_diff = 4, lim = (0,0), digits = 1, unit_tex = "", zero_lim = -8, v = False):
+    
+    if sx == 0:
+        sx = None
+    
     bool_bracket = [False, False]
     str_x = str_sx = str_exp = str_unit = str_unit = str_brl =  str_brr = ""
     
@@ -178,8 +182,6 @@ def tex_value(x, sx = None, unit = "", max_exp_diff = 4, lim = (0,0), digits = 1
     if (exp_sx > exp_x) and (exp_x < zero_lim) and (sx is not None) and np.isfinite(sx):
         exp_x = exp_sx
         qp("\n set exp_x to exp_sx", verbose = v)
-    elif (exp_x):
-        exp_x = 0
         
     
     if np.abs(exp_x - exp_sx) < max_exp_diff:
@@ -203,7 +205,10 @@ def tex_value(x, sx = None, unit = "", max_exp_diff = 4, lim = (0,0), digits = 1
     else:
         qp("\n  numbers are not close: ", verbose=v)
         if lim[0] < exp_x < lim[1]:
+            qp(f"\n exp_x within limits: {lim[0]} < {exp_x} < {lim[1]}", verbose=v)
             exp_x = 0
+        
+        qp(f"\ntex_number_exp({x}, exp = {exp_x}, digits = {digits})", verbose=v)
         str_x = tex_number_exp(x, exp = exp_x, digits = digits)
         if sx is not None:
             if lim[0] < exp_sx < lim[1]:

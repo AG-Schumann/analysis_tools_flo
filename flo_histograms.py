@@ -638,7 +638,7 @@ def s_pois(counts, rng = .682, return_range = False):
     
 
 
-def binning(x, y, bins, label="bc"):
+def binning(x, y, bins, label="bc", fmt = ".1f"):
     '''
     returns y sorted into x-bins
     x and y need to have the same form
@@ -653,9 +653,10 @@ def binning(x, y, bins, label="bc"):
     bin_ids = np.digitize(x, bins)
     
     if label == "br":
-        bnames = [f"{x} to {y}" for x, y in zip(bins[:-1], bins[1:])]
+        bnames = [f"{x:{fmt}} to {y:{fmt}}" for x, y in zip(bins[:-1], bins[1:])]
     else:
-        bnames = bin_centers
+        bnames = [f"{c:{fmt}}" for c in bin_centers]
+    
     
 
     bin_contents = {bn:[] for bn in bnames}
@@ -677,6 +678,7 @@ def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=10, path
         
     
     binned_data = binning(x, y, bins)
+    bc_all = get_bin_centers(bins)
     bw = np.diff(bins)
     
     df = pd.DataFrame()
@@ -691,7 +693,7 @@ def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=10, path
     
     
     
-    for bwi, (bc, values) in zip(bw, binned_data.items()):
+    for bwi, bc_i, (bc, values) in zip(bw, bc_all, binned_data.items()):
         N = len(values)
 
         if N >= n_counts_min:
@@ -707,7 +709,7 @@ def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=10, path
                         
                         
                     res = {
-                        "bc": bc,
+                        "bc": bc_i,
                         "N": len(values),
                         "median": md,
                         "s_median": smd,
@@ -724,13 +726,13 @@ def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=10, path
                         
                         scale = (bwi * .9) / np.max(cx+scx)
                         
-                        xp = cx*scale + bc - bwi/2
+                        xp = cx*scale + bc_i - bwi/2
                         sxp = [scx[0]*scale, scx[1]*scale]
                         
                         errorbar(ax, x = xp, sx = sxp, sy = None, y = bc_y, plot = True, color = color, alpha = .1)
                         
                         yp_fit = lin_or_logspace(bc_y, 100)
-                        xp_fit = ff.gauss(yp_fit, *ret_all["fit"]) * scale + bc - bwi/2
+                        xp_fit = ff.gauss(yp_fit, *ret_all["fit"]) * scale + bc_i - bwi/2
                         
                         ax.plot(xp_fit, yp_fit, color = color, alpha = .5)
                    

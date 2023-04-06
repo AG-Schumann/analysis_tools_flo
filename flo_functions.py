@@ -21,6 +21,7 @@ class fit_function:
         description = "",
         sf = False,
         short_description = "",
+        units = None,
         parameters = None, parameters_tex = None,
         formula = "", formula_tex = None,
         docstring = ""
@@ -46,7 +47,10 @@ class fit_function:
             self.parameters_tex = parameters
         else:
             self.parameters_tex = parameters_tex
-    
+        if units is None:
+            self.units = [""] * len(self.parameters)
+        else:
+            self.units = units
         self.formula = formula
         if formula_tex is None:
             self.formula_tex = formula
@@ -65,7 +69,6 @@ class fit_function:
             yield(pt)
     def __len__(self):
         return(len(self.parameters))
-
 
 
 
@@ -113,34 +116,41 @@ def fit(
             qp("- kwargs_plot not provided", verbose = verbose, end = "\n")
             kwargs_plot = {}
         
-        params_all = f.parameters.copy()
-        params = params_all.copy()
-        params_tex = f.parameters_tex.copy()
+        qp("- setting up parameters", verbose = verbose, end = "\n")
+        
+        
+        fit_out = np.zeros(len(f))
+        sfit_out = np.zeros(len(f))
+        cov_out = 0*np.eye(len(f))
+        ids_free = []
+        pars_names = []
+        
+        for par_i, par in enumerate(f.parameters):
+            if par in fixed_values:
+                fit_out[par_i] = fixed_values[par]
+            else:
+                ids_free.append(par_i)
+                pars_names.append(par)
+
+        qp(f"- ids_free: {ids_free}", verbose = verbose, end = "\n")
+        qp(f"- pars_names: {pars_names}", verbose = verbose, end = "\n")
         
         
         if p0 is True:
-            qp(f"- calculating p0", verbose = verbose, end = "\n")
-            p0 = np.array(f.p0(x, y, **fixed_values))
-            
-            for p, v in zip(params_all, p0):
-                qp(f"  * {p}: {v}", verbose = verbose, end = "\n")
-        elif p0 is False:
-            p0 = None
-        
-        
-        
-        qp("- setting up f and its parameters", verbose = verbose, end = "\n")
-        f_fit = lambda x, *args: f.f(x, *args, **fixed_values)
-        
+            try:
+                p0 = np.array(f.p0(x, y, **fixed_values))
+            except TypeError:
+                qp("- failed p0 with fixed_values, trying without", verbose = verbose, end = "\n")
+                p0 = np.array(f.p0(x, y))
+        if p0 is not False:
+            qp(f"- p0 all:{p0}", verbose = verbose, end = "\n")
+            p0 = p0[np.array([*ids_free])]
+            qp(f"- p0 cut:{p0}", verbose = verbose, end = "\n")
+        qp("- setting up f", verbose = verbose, end = "\n")
+        f_fit = lambda x, *args: f.f(x, **{n:v for n,v in zip(pars_names, args)}, **fixed_values)
         qp(f"- len(p0): {len(p0)}", verbose = verbose, end = "\n")
-        for par, v in fixed_values.items():
-            qp(f"  * removing {par} (fixed to {v})", verbose = verbose, end = "\n")
-            id_par = params.index(par)
-            _ = params.pop(id_par)
-            _ = params_tex.pop(id_par)
-            if p0 is not None:
-                p0 = np.delete(p0, id_par)
-        qp(f"- len(p0): {len(p0)}", verbose = verbose, end = "\n")
+        
+        
         
         if clean_input is True:
             qp(f"- cleaning data", verbose = verbose, end = "\n")
@@ -193,7 +203,7 @@ def fit(
                 if verbose is True:
                     nev = output[0]["nfev"]
                     print(f"fit {i+1} ({nev} iterations)")
-                    for p, v, sv in zip(params, fit, sfit):
+                    for p, v, sv in zip(pars_names, fit, sfit):
                         print(f"{p:>{f.plen}}: {v:12.4g} ±{sv:12.4g}")
                 
                 if np.inf not in cov:
@@ -201,7 +211,21 @@ def fit(
                 elif i == 0:
                     if verbose is True: print("\33[31mWarning: found infinite covariance matrix, fitting again with p0 = fit + .1\33[0m")
                     p0 = fit + .1
-
+        
+        
+        if len(fixed_values) > 0:
+            for i_fit, id_par in enumerate(ids_free):
+                fit_out[id_par] = fit[i_fit]
+                for j_fit, jd_par in enumerate(ids_free):
+                    cov_out[id_par, jd_par] = cov[i_fit, j_fit]
+            sfit_out = np.diag(cov_out)**.5
+        else:
+            fit_out = fit
+            sfit_out = sfit
+            cov_out = cov
+            
+        
+        
         try:
             if sigma is not None:
                 qp(f"- calculating chi^2", verbose = verbose, end = "\n")
@@ -217,6 +241,9 @@ def fit(
             chi2 = [0,0,0,"", ""]
             show_gof = False
             chi_str = ""
+        
+        
+        
         
         if show_gof is False:
             chi_str = ""
@@ -240,20 +267,24 @@ def fit(
                 qp(f"- adding description of f", verbose = verbose, end = "\n")
                 addlabel(ax, f)
             
+            
+            
             if units is None:
+                
                 qp(f"- defaulting units", verbose = verbose, end = "\n")
-                units = [""]*len(params)
+                units = f.units
+                
             if show_fit_result is True:
                 qp(f"- adding fit results to plot", verbose = verbose, end = "\n")
-                add_fit_parameters(ax, params_tex, fit, sfit, units)
+                add_fit_parameters(ax, f, fit_out, sfit_out, units)
         
         qp(f"- preparing output list", verbose = verbose, end = "\n")
-        out = [fit, sfit, chi2, output]
+        out = [fit_out, sfit_out, chi2, output]
 
 
         if return_cov is True:
             qp(f"- replacing sfit with cov", verbose = verbose, end = "\n")
-            out[1] = cov
+            out[1] = cov_out
         
         if return_output is not True:
             qp(f"- removing full output", verbose = verbose, end = "\n")
@@ -266,6 +297,8 @@ def fit(
         print(e)
         return(False)
     
+
+
 
 
 
@@ -821,4 +854,25 @@ diffusion  = fit_function(
 )
 
     
+def f_doke(x, g1, g2, W = 13.7):
+    return((x*W/1000 * -g2/g1 + g2)/W*1000)
+
+def f_p0_doke(x, y, g1 = .1, g2 = 2, W = 13.7):
+    #     m, c = np.polyfit(x, y, 1)
+#     if x0 is False:
+#         x0 = -c/m
+    return(g1, g2, W)
+
+
+doke_fit  = fit_function(
+    f = f_doke,
+    f_p0 = f_p0_doke,
+    description = "doke fit",
+    short_description = "",
+    parameters = ["g1", "g2", "W"],
+    parameters_tex = ["g_1", "g_2", "W"],
+    units = ["PE/γ", "PE/e", "keV/quanta"],
+    formula = "a doke fit",
+    formula_tex = "",
     
+)
