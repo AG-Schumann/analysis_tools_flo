@@ -333,9 +333,21 @@ def f_poly_0(x, c):
 def f_p0_poly_0(x, y):
     x_, y_ = clean(x, y)
     return(np.mean(y))
+
+def f_spoly_0(x, c, sfit = False, cov = False):
+    if (sfit is False) and (cov is False):
+        print("\33[31mno uncertaintys given for f_spoly_1 (set either sfit or cov)\33[0m")
+        return(np.zeros_like(x))
+    if (sfit is False):
+        sc = cov[0,0]**.5
+    else:
+        sc = sfit
+    return(sc)
+
     
 poly_0 = fit_function(
     f = f_poly_0,
+    sf = f_spoly_0,
     f_p0 = f_p0_poly_0,
     description = "constant function",
     short_description = "c",
@@ -393,9 +405,37 @@ def f_poly_2(x, a2, a1, a0):
 def f_p0_poly_2(x, y):
     x_, y_ = clean(x, y)
     return(np.polyfit(x_, y_, deg = 2))
+
+
+
+def f_spoly_2(x, a2, a1, a0, sfit = False, cov = False):
+    if (sfit is False) and (cov is False):
+        print("\33[31mno uncertaintys given for f_spoly_1 (set either sfit or cov)\33[0m")
+        return(np.zeros_like(x))
+    if (cov is False):
+        cov_01 = cov_02 = cov_12 = 0
+    else: 
+        cov_01, cov_02, cov_12 = cov[0,1],cov[0,2],cov[1,2]
+        
+    if (sfit is False):
+        sa2, sa1, sa0 = np.diag(cov)**.5
+    else:
+        sa2, sa1, sa0 = sfit
+    
+    d2 = 2*a2*x
+    d1 = x
+    d0 = 1
+     
+    return((
+          (d2**2 * sa2**2) + (d1**2 * sa1**2) + (d0**2 * sa0**2)
+        + 2*cov_01*d0*d1 + 2*cov_02*d0*d2 + 2*cov_12*d1*d2
+        
+    )**.5)
+
     
 poly_2 = fit_function(
     f = f_poly_2,
+    sf = f_spoly_2,
     f_p0 = f_p0_poly_2,
     description = "second order polynomial",
     short_description = "second order polynomial",
