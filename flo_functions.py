@@ -84,6 +84,7 @@ def fit(
     show_fit_result = True,
     show_gof = True,
     show_f = False,
+    show_p0 = False,
     verbose = False,
     kwargs_curvefit = None,
     kwargs_plot = None,
@@ -139,9 +140,11 @@ def fit(
         if p0 is True:
             try:
                 p0 = np.array(f.p0(x, y, **fixed_values))
+
             except TypeError:
                 qp("- failed p0 with fixed_values, trying without", verbose = verbose, end = "\n")
                 p0 = np.array(f.p0(x, y))
+        
         if p0 is not False:
             qp(f"- p0 all:{p0}", verbose = verbose, end = "\n")
             p0 = p0[np.array([*ids_free])]
@@ -152,13 +155,20 @@ def fit(
         
         
         
-        if clean_input is True:
-            qp(f"- cleaning data", verbose = verbose, end = "\n")
-            x, y, sigma = clean(x, y, sigma)
-        
         if sigma is None:
             qp(f"- no sy given", verbose = verbose, end = "\n")
             absolute_sigma = False
+        elif len(sigma.shape) > 1:
+            qp(f"- sigma has more than one dimension, using upper values", verbose = verbose, end = "\n")
+            sigma = sigma[1]
+        if sx is not None and len(sx.shape) > 1:
+            qp(f"- sx has more than one dimension, using upper values", verbose = verbose, end = "\n")
+            sx = sx[1]
+
+        if clean_input is True:
+            qp(f"- cleaning data", verbose = verbose, end = "\n")
+            x, y, sigma, sx = clean(x, y, sigma, sx)
+        
         
         
         
@@ -267,7 +277,9 @@ def fit(
                 qp(f"- adding description of f", verbose = verbose, end = "\n")
                 addlabel(ax, f)
             
-            
+            if show_p0 is True:
+                y0 = f_fit(xp, *p0)
+                ax.plot(xp, y0, color = color, linestyle = "dashed")
             
             if units is None:
                 
@@ -870,7 +882,87 @@ normal = fit_function(
     formula_tex = "$\\frac{1}{\\sigma \\sqrt{{2 \\pi}}} \\exp{{-\\frac{{x-\\mu}}{{2\\sigma}}^2}}$",
 )
     
+# exponential with turn on function....
+def f_exp_turn_on(t, t_0, tau, a, A):
+    return(A * 1/(1+np.exp((t_0-t)/a)) * np.exp((t_0-t)/tau))
+
+def f_p0_exp_turn_on(t, y, t_0=True, tau=True, a=True, A=True):
     
+    order = np.argsort(t)
+    x_ = t[order]
+    y_ = y[order]
+    
+    y_cs = np.cumsum(y_)
+    y_cs = y_cs/y_cs[-1]
+
+    id_max = np.argmax(y_)
+    
+    diffs = np.interp([.05, 0.15], y_cs, x_)
+    
+    
+    
+    if A is True:
+        A = y_[id_max]
+    if a is True:
+        a = diffs[1] - diffs[0]
+    if t_0 is True:
+        t_0 = diffs[1]
+    if tau is True:
+        y_ref = np.abs(A*np.exp(-1) - y_[id_max:])
+        tau = t[np.argmin(y_ref)+id_max] - t[id_max]
+        
+        
+        
+    return(t_0, tau, a, A)
+
+
+def f_sexp_turn_on(t, t_0, tau, a, A, sfit = False, cov = False):
+    if (sfit is False) and (cov is False):
+        print("\33[31mno uncertaintys given for f_spoly_1 (set either sfit or cov)\33[0m")
+        return(np.zeros_like(x))
+    if (cov is False):
+        cov_01 = cov_02 = cov_03 = cov_12 = cov_13 = cov_23 = 0
+    else: 
+        cov_01, cov_02, cov_03, cov_12, cov_13, cov_23 = cov[0,1], cov[0,2], cov[0,3], cov[1, 2], cov[1,3], cov[2,3]
+        
+    if (sfit is False):
+        st_0, stau, sa, sA = np.diag(cov)**.5
+    else:
+        st_0, stau, sa, sA = sfit
+    
+    # done with wolfram alpha
+    dt_0 = A * (1/tau-1/a) * np.exp(-(t-t_0)*(a-tau)/a*tau)
+    dtau = A * (t-t_0) * np.exp(-(t-t_0)*(a-tau)/a * tau)/tau**2
+    da =   A * (t_0-t) * np.exp((t_0-t)/tau - (t_0-t)/a)/a**2
+    dA =   1/(1+np.exp((t_0-t)/a)) * np.exp((t_0-t)/tau)
+     
+    return((
+          (dt_0**2 * st_0**2) + (dtau**2 * stau**2) + (da**2 * sa**2) + (dA**2 * sA**2)
+        + 2*cov_01*dt_0*dtau + 2*cov_02*dt_0*da + 2*cov_03*dt_0*dA
+        + 2*cov_12*dtau*da + 2*cov_13*dtau*dA + 2*cov_23*da*dA
+        
+    )**.5)
+
+ 
+
+
+
+
+
+exp_turn_on = fit_function(
+    f = f_exp_turn_on,
+    sf = f_sexp_turn_on,
+    f_p0 = f_p0_exp_turn_on,
+    description = "exponential decay with turn on",
+    short_description = "exponential decay with turn on",
+    parameters = ["t_0", "tau", "a", "A"],
+    parameters_tex = ["t_0", "\\tau", "a", "A"],
+    formula = "A * 1/(1+np.exp((t_0-t)/a)) * np.exp((t_0-t)/tau)",
+    formula_tex = "$A  1/(1+exp((t_0-t)/a)) exp((t_0-t)/\\tau)$",
+    docstring = '''
+'''
+)
+
 
 
 
