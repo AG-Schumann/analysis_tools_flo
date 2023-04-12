@@ -12,11 +12,8 @@ import inspect
 from datetime import datetime
 
 
-
-
-
-
-
+path_fields = "/data/workspace/Flo/library_flo/files/fields.xls"
+fields_df = pd.read_excel(path_fields)
 
 
 

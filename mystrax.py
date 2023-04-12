@@ -43,6 +43,7 @@ corr_coll = db["correction_info"]
 
 labels = gc.labels
 
+fields_df = gc.fields_df
 
 
 

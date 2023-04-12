@@ -7,6 +7,10 @@ nc = nestpy.NESTcalc(nestpy.VDetector())
 
 
 
+
+
+
+
 def get_quanta_for_E_dft(
     decay = 0,
     drift_field = 500.,
