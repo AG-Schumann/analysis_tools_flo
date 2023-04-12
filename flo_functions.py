@@ -138,20 +138,35 @@ def fit(
         
         
         if p0 is True:
+            qp("- obtaining p0", verbose = verbose, end = "\n")
+        
             try:
                 p0 = np.array(f.p0(x, y, **fixed_values))
-
+                qp("- default worked", verbose = verbose, end = "\n")
+                
             except TypeError:
                 qp("- failed p0 with fixed_values, trying without", verbose = verbose, end = "\n")
                 p0 = np.array(f.p0(x, y))
-        
-        if p0 is not False:
-            qp(f"- p0 all:{p0}", verbose = verbose, end = "\n")
-            p0 = p0[np.array([*ids_free])]
-            qp(f"- p0 cut:{p0}", verbose = verbose, end = "\n")
+            
+            if not isinstance(p0, np.ndarray):
+                p0 = np.array([p0])
+            
+            try:
+                qp(f"- p0 all: {p0}", verbose = verbose, end = "\n")
+                if (p0 is not False) and (len(ids_free) != len(f)):
+                
+                    qp("- trying to cut p0", verbose = verbose, end = "\n")
+                    p0 = p0[np.array([*ids_free])]
+            except Exception as e:
+                qp(f"- p0 cutting error: {e}", verbose = verbose, end = "\n")
+
+            
+            
+            qp(f"- p0 final: {p0}", verbose = verbose, end = "\n")
+            qp(f"- len(p0): {len(p0)}", verbose = verbose, end = "\n")
+            
         qp("- setting up f", verbose = verbose, end = "\n")
         f_fit = lambda x, *args: f.f(x, **{n:v for n,v in zip(pars_names, args)}, **fixed_values)
-        qp(f"- len(p0): {len(p0)}", verbose = verbose, end = "\n")
         
         
         
@@ -1008,3 +1023,46 @@ doke_fit  = fit_function(
     formula_tex = "$S_2 = \\frac{{1000}}{{W}} \\left(S1\\frac{{W}}{{1000}}\\frac{{- g_2}}{{g_1}} +g_2\\right)$",
     
 )
+
+
+
+def f_moyal(x, mu = 0, scale = 1, A = 1):
+    y = (x-mu)/scale
+    return(
+        A/scale * 1/(2*np.pi)**.5  * np.exp(-(y + np.exp(-y))/2)
+    )
+
+    
+# a landau approximation
+
+
+def f_p0_moyal(x, y, mu = True, scale = True, A = True):
+    
+    order = np.argsort(x)
+    x_ = x[order]
+    y_ = y[order]
+    ycs = np.cumsum(y_)
+    ycs_n = ycs/ycs[-1]
+    
+    
+    if mu is True:
+        mu = x[np.argmax(y)]
+    if scale is True:
+        scale = np.diff(np.interp([0.25, 0.5], ycs_n, x_))[0]
+    if A is True:
+        A = np.max(y) * scale
+    return(mu, scale, A)
+
+
+moyal = fit_function(
+    f = f_moyal,
+    f_p0 = f_p0_moyal,
+    description = "moyal distribution (landau approximation)",
+    short_description = "moyal",
+    parameters = ["mu", "scale", "A"],
+    parameters_tex = ["\\mu", "\\mathrm{{scale}}", "A"],
+    formula = "",
+    formula_tex = "moyal",
+    docstring = ''''''
+) 
+

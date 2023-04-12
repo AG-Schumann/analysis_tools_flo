@@ -1,5 +1,5 @@
 import numpy as np
-
+from threading import Thread, Event
 
 def qp(*args, sep = ", ", end = "", flush = True, verbose = True):
     if verbose is True: print(sep.join(map(str, args)), end = end, flush = flush)
@@ -15,19 +15,36 @@ def string_join(*args, sep = ""):
     return(sep.join([str(arg) for arg in args if arg != ""]))
 
 
-
-
 def inv_small(x, ref = 1):
     x_ = x*1
     id_small = (np.abs(x) < ref) & (x != 0)
     x_[id_small] = 1/x[id_small]
     return(x_)
 
-def lin_or_logspace(x, N = 1000, show_ratio = False):
+
+def logspace_over(x, N):
+    x_,*_ = clean(x)
+    x_ = x_[x_ > 0]
+    x0 , x1 = np.min(x_), np.max(x_)
+    return(np.logspace(*np.log10([x0, x1]), N))
+        
+def linspace_over(x, N):
+    x_, *_ = clean(x)
+    x0 , x1 = np.min(x_), np.max(x_)
+    return(np.linspace(x0, x1, N))
+
+
+
+
+def lin_or_logspace(x, N = 1000, show_ratio = False, linlog_thr = 1):
     '''
     checks if data is distributed log or lin
+    
+    set force to "lin" or "log" to force that
+    
     '''
-    if min(x) > 0:
+    
+    if (min(x) > 0):
         x_ = np.sort(x)
         linlog = (
             len(np.unique(np.round(np.log(np.diff(x_)))))/
@@ -35,12 +52,12 @@ def lin_or_logspace(x, N = 1000, show_ratio = False):
         )
         if show_ratio is True:
             print(linlog)
-        if linlog > 1:
-            return(np.logspace(np.log10(min(x)), np.log10(max(x)), N))
+        if (linlog >= linlog_thr):
+            return(logspace_over(x, N))
     elif show_ratio is True:
         print("negative numbers found, using linscale")
     # fallback to linspace
-    return(np.linspace(min(x), max(x), N))
+    return(linspace_over(x, N))
     
 
 
@@ -397,3 +414,24 @@ def chi_sqr(f, x, y, s_y, *pars, ndf = False, ignore_zeros = False, **kwargs):
         )
     )
 
+
+
+def call_maxtime(f, *args, max_time = 10, **kwargs):
+    ret = False
+    
+    def wrapper(*args, **kwargs):
+        nonlocal ret
+        try:
+            ret = f(*args, **kwargs)
+        except Exception as e:
+            ret = e
+        
+    
+    
+    action_thread = Thread(target=wrapper, args = args, kwargs=kwargs)
+
+    action_thread.start()
+    action_thread.join(timeout = max_time)
+    
+    
+    return(ret)
