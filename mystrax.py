@@ -674,7 +674,7 @@ def make_dV_dict(runs_all):
     return(runs_all_dVs)
 
 
-def make_df(runs_all, dict_types = True):
+def make_df(runs_all, dict_types = True, *args, **kwargs):
     df = pd.DataFrame()
     t0 = min([x["start"] for r, x in runs_all.items()])
     
@@ -682,7 +682,7 @@ def make_df(runs_all, dict_types = True):
         d = {
             "run": r,
             "t_rel": (d["start"] - t0).total_seconds(),
-            **flatten_dict(d),
+            **flatten_dict(d, *args, **kwargs),
             
         }
         df = df.append(d, ignore_index=True)
@@ -713,7 +713,7 @@ def make_df(runs_all, dict_types = True):
     return(df)
 
 
-def get_all_runs(query = False):
+def get_all_runs(query = False, *args, **kwargs):
     '''
     runs_all, runs_all_dVs = mystrax.get_all_runs()
     
@@ -728,7 +728,7 @@ def get_all_runs(query = False):
     runs_all = {db_i["run"]:db_i for db_i in db}
 
 
-    runs_all_df  = make_df(runs_all)
+    runs_all_df  = make_df(runs_all, *args, **kwargs)
     
     return(runs_all, runs_all_df)
     

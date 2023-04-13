@@ -68,7 +68,7 @@ def enumezip(*args):
     for i, argsi in enumerate(zip(*args)):
         yield(i, *argsi)
 
-def flatten_dict(d, sep = ".", path = ""):
+def flatten_dict(d, sep = "__", path = "", *args, **kwargs):
     '''
     flattens a dictionary recursevily
     '''
