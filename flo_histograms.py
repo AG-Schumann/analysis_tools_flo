@@ -268,6 +268,8 @@ def ax2(*labs, reminder = True, **kwargs):
 
 def fax(ax_, ax2):
     ax_.set_axis_off()
+    ax2.set_xscale(ax.get_xscale())
+    ax2.set_yscale(ax.get_yscale())
     ax2.set_xlim(ax_.get_xlim())
     ax2.set_ylim(ax_.get_ylim())
     
