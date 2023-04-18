@@ -252,6 +252,8 @@ def ax(*labs, **kwargs):
     add_labs(ax, labs)
     return(ax)
 
+
+
 def ax2(*labs, reminder = True, **kwargs):
     '''
     use
@@ -266,14 +268,16 @@ def ax2(*labs, reminder = True, **kwargs):
     return(ax_, ax2)
 
 
-def fax(ax_, ax2):
+def fax(ax_, ax2, setlabels_auto = True):
     ax_.set_axis_off()
-    ax2.set_xscale(ax.get_xscale())
-    ax2.set_yscale(ax.get_yscale())
+    ax2.set_xscale(ax_.get_xscale())
+    ax2.set_yscale(ax_.get_yscale())
     ax2.set_xlim(ax_.get_xlim())
     ax2.set_ylim(ax_.get_ylim())
     
-
+    if (ax2.get_ylabel() == "") and (setlabels_auto is True):
+        ax2.set_xlabel(ax_.get_xlabel())
+        ax2.set_ylabel(ax_.get_ylabel())
 
 def errorbar(
     ax, x, y, sy,

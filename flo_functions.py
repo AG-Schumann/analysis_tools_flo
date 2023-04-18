@@ -29,6 +29,7 @@ class fit_function:
         self.f = f
         self.p0 = f_p0
         self.sf = sf
+        
         self.description = description
         self.short_description = short_description
         self.s = short_description
@@ -249,7 +250,8 @@ def fit(
             sfit_out = sfit
             cov_out = cov
             
-        
+        qp("- fit results:", verbose = verbose, end = "\n")
+        qp(fit, verbose = verbose, end = "\n")
         
         try:
             if sigma is not None:
@@ -278,22 +280,31 @@ def fit(
             
             if xp is True:
                 xp = lin_or_logspace(x, 1000)
-            qp(f"- calculating fit curve", verbose = verbose, end = "\n")
-            yf = scale_plot*f_fit(xp, *fit)
-            color = ax.plot(xp, yf, label = f"{label}{chi_str}", color = color, **kwargs_plot)[0].get_color()
+                
+            if xp is not False:
+                qp(f"- calculating fit curve", verbose = verbose, end = "\n")
+                yf = scale_plot*f(xp, *fit_out)
+                color = ax.plot(xp, yf, label = f"{label}{chi_str}", color = color, **kwargs_plot)[0].get_color()
             
             if (show_fit_uncertainty is True) and callable(f.sf):
-                qp(f"- showing fit curve uncertainty", verbose = verbose, end = "\n")
-                s_yf = f.sf(xp, *fit, **fixed_values, cov = cov)
-                ax.fill_between(xp, yf-s_yf, yf+s_yf, color = color, alpha = .2)
-            
+                try:
+                    qp(f"- showing fit curve uncertainty", verbose = verbose, end = "\n")
+                    qp(f"- len(fit_out): {len(fit_out)}", verbose = verbose, end = "\n")
+                    qp(f"- cov_out.shape: {cov_out.shape}", verbose = verbose, end = "\n")
+                    
+                    s_yf = f.sf(xp, *fit_out, cov = cov_out)
+                    qp(f"- type syf: {type(s_yf)}", verbose = verbose, end = "\n")
+                    ax.fill_between(xp, yf-s_yf, yf+s_yf, color = color, alpha = .2)
+                    qp(f"- curve drawn", verbose = verbose, end = "\n")
+                except Exception as e:
+                    qp(f"  - \33[31m{e}\33[0m", verbose = verbose, end = "\n")
             
             if show_f is True:
                 qp(f"- adding description of f", verbose = verbose, end = "\n")
                 addlabel(ax, f)
             
             if show_p0 is True:
-                y0 = f_fit(xp, *p0)
+                y0 = f(xp, *p0)
                 ax.plot(xp, y0, color = color, linestyle = "dashed")
             
             if units is None:
@@ -338,13 +349,37 @@ def add_fits_result_to_df(df, f, fit_result, dict_append = None):
         dict_append = {}
     
     out = {**dict_append}
-    
-    if len(fit_result) == 3:
+    sfit = [False] * len(f)
+    if isinstance(fit_result, dict):
+        fit = fit_result["fit"]
+        
+        if "chi2" in fit_result:            
+            out["chi2"] = fit_result["chi2"][2]
+        
+        if "cov" in fit_result:
+            out["cov"] = fit_result["cov"]
+            if "sfit" not in fit_result:
+                sfit = np.diag(out["cov"])**.5
+        
+        if "sfit" in fit_result:
+            sfit = fit_result["sfit"]
+        
+        
+    elif len(fit_result) == 2:
+        fit, sfit = fit_result
+    elif len(fit_result) == 3:
         fit, sfit, chi2 = fit_result
-    if len(fit_result) == 4:
+        out["chi2"] = chi2[2]
+    elif len(fit_result) == 4:
         fit, sfit, chi2, cov = fit_result
+        out["chi2"] = chi2[2]
         out["cov"] = cov
-    out["chi2"] = chi2[2]
+    else:
+        raise TypeError
+        
+    
+    
+    
     for p, v, sv in zip(f.parameters, fit, sfit):
         out[f"result_{p}"] = v
         out[f"result_s{p}"] = sv
@@ -1000,29 +1035,76 @@ diffusion  = fit_function(
     formula_tex = "$\\sqrt{\\frac{{2 D\ t}}{{v_\\mathrm{{drift}}}}+w_0^2}$",
 )
 
+
+
+# doke function 
+def f_doke(x, g1, g2):
+    return(x * -g2/g1 + g2)
+
+def f_p0_doke(x, y, g1 = True, g2 = True):
+    x_ = np.array(x) 
+    y_ = np.array(y)
     
-def f_doke(x, g1, g2, W = 13.7):
-    return((x*W/1000 * -g2/g1 + g2)/W*1000)
+    if not isinstance(g1, bool):
+        x_ = np.concatenate((x_, [g1]))
+        y_ = np.concatenate((y_, [0]))
+    if not isinstance(g2, bool):
+        x_ = np.concatenate((x_, [0]))
+        y_ = np.concatenate((y_, [g2]))
+    
+    pf = np.polyfit(x_, y_, 1)
+    
+    m, mg2 = pf
+    if g2 is True:
+        g2 = mg2
+    
+    if g1 is True:
+        g1 = -g2/m
+    return(g1, g2)
 
-def f_p0_doke(x, y, g1 = .1, g2 = 2, W = 13.7):
-    #     m, c = np.polyfit(x, y, 1)
-#     if x0 is False:
-#         x0 = -c/m
-    return(g1, g2, W)
+def f_sdoke(x, g1, g2, sfit=False, cov=False):
+    if (sfit is False) and (cov is False):
+        print("\33[31mno uncertaintys given for f_sdoke (set either sfit or cov)\33[0m")
+        return(np.zeros_like(x))
+    if (cov is False):
+        cg1g2 = 0
+    else: 
+        cg1g2 = cov[0,1]
+    
+    if (sfit is False):
+        sg1, sg2 = np.diag(cov)**.5
+    else:
+        sg1, sg2 = sfit
+    
+    
+    dg1 = g2/g1**2*x
+    dg2 = 1-x/g1
+    
+    
+    sy = (
+          (dg1 * sg1)**2
+        + (dg2 * sg2)**2
+        + (dg1 * dg2 * cg1g2)
+    )**.5
+    
+    return(sy)
+    
+    
 
-
-doke_fit  = fit_function(
+doke  = fit_function(
     f = f_doke,
+    sf = f_sdoke,
     f_p0 = f_p0_doke,
     description = "doke fit",
     short_description = "doke fit",
-    parameters = ["g1", "g2", "W"],
-    parameters_tex = ["g_1", "g_2", "W"],
-    units = ["PE/γ", "PE/e", "keV/quanta"],
-    formula = "S2 = 1000/W * (S * (W/1000) * (-g2/g1) + g2)",
-    formula_tex = "$S_2 = \\frac{{1000}}{{W}} \\left(S1\\frac{{W}}{{1000}}\\frac{{- g_2}}{{g_1}} +g_2\\right)$",
+    parameters = ["g1", "g2"],
+    parameters_tex = ["g_1", "g_2"],
+    units = ["PE/γ", "PE/e"],
+    formula = "S2 = S1 * (-g2/g1) + g2",
+    formula_tex = "$S_2 = \\left(S1 \\frac{{- g_2}}{{g_1}} +g_2\\right)$",
     
 )
+
 
 
 

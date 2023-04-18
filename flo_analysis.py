@@ -10,7 +10,7 @@ import decimal
 from flo_fancy import *
 from default_bins import *
 import get_corrections as gc
-
+import doke
 
 import inspect
 from datetime import datetime
@@ -1209,146 +1209,24 @@ def plot_signals(data, fname = False, title = ""):
 
 
 def get_doke_df_from_ds(
-    ds,
-    Energys = True,
-    field_ids = True,
-    field = "areas_corrected",
-    label_prefix = "$^{{83}}$Kr: ",
-    label_suffix = "",
-    doke_df = False,
+    *args, **kwargs
 ):
-    if Energys is True:
-        Energys = [9.4053, 32.1516, 41.5569] # keV
-    if field_ids is True:
-        field_ids = [(1,3), (0,2)]#, (6,7)]
-    
-    
-    if not isinstance(doke_df, pd.DataFrame):
-        doke_df = pd.DataFrame()
-    for E, fids in zip(Energys, field_ids):
-        signals = ds[field][:, fids]
-        s1, s2 = signals[:,0], signals[:,1]
-        
-        _, s1, s2 = fhist.remove_zero((s1 > 0) & (s2 > 0), s1, s2)
-
-        x, spr_x, sx = fhist.median_gauss(s1/E, strict_positive=True)
-        y, spr_y, sy = fhist.median_gauss(s2/E, strict_positive=True)
+    print("please use doke.get_df_from_ds(ds, *args, **kwargs)")
 
 
-        doke_df = doke_df.append(
-            {
-                "S1": x,
-                "S2": y,
-                "sS1": sx,
-                "sS2": sy,
-                "E": E,
-                "label": f"{label_prefix}{E:.1f} keV{label_suffix}",
-            },
-            ignore_index = True
-        )
-    return(doke_df)
 
 
 def doke_df_plot(
-    ax,
-    doke_df,
+    *args, **kwargs
 ):
-    
-    '''
-    takes summary dataset and returns g1, g2, sg1, sg2
-    
-    parameters:
-        ds: dataset ("..._summary") to use for calculation
-        ax (False): set this to an plt.Axes element to plot into there
-        Energys (True): energies if the coresponding decay
-            if True: use Krypton as default (32.2, 9.41, 41.6)
-        field ids (True): list of 2-tuples of indize to use to get S1&S2 areas
-            if True: set defaults  to split first and seconds S1&S2
-        
-        W (13.7): W to use for g_i calculations
-        field ('areas_corrected'): which field in ds contains the areas
-        only relevant if ax is specified:
-          label ('$^{{83}}$Kr: '): label to put into legend before the energy
-          zoom (False): wheter or not to zoom only on datapopints
-            (instead of range whwere fit crosses axis)
-          show spread (False): show also spread of median (faint)
-    
-    '''
-    
-    if not isinstance(ax, plt.Axes):
-        ax, doke_df = doke_df, ax
-    
-    if "label" not in doke_df:
-        doke_df["label"] = ""
-    for i_row, row in doke_df.iterrows():
-
-        color = fhist.errorbar(
-            ax,
-            row["S1"], row["S2"], row["sS2"],
-            sx = row["sS1"], plot = True,
-            label = row["label"],
-            marker = ".",
-            capsize = 0
-        )
+    print("please use doke.df_plot(ax, ds, *args, **kwargs)")
 
 
 
 def g1f2_from_doke_df(
     doke_df,
-    ax = False,
-    W = 13.7,
-    f_fit = ff.poly_1,
-    color = "black",
-    label = None,
-    show_fit_result = False,
-    plot_doke = True,
-    **kwargs,
+    *args, **kwargs
 ):
-    x, sx = doke_df["S1"], doke_df["sS1"]
-    y, sy = doke_df["S2"], doke_df["sS2"]
-    
-    
-    fit_res = ff.fit(f_fit, x, y, sy, sx = sx, return_cov = True, **kwargs)
-    fit, cov, _ = fit_res
-    
-    
-    
-    
-    g1, g2, sg1, sg2 = get_g1g2(*fit, cov, W = W)
-    
-    
-    
-    if isinstance(ax, plt.Axes):
-        if plot_doke is True:
-            doke_df_plot(ax, doke_df)
-        
-        ax.set_xlabel("S1/E / PE/keV")
-        ax.set_ylabel("S2/E / PE/keV")
-
-        xp = np.linspace(*ax.get_xlim(), 1000)
-        xlim = ax.get_xlim()
-        ylim = ax.get_ylim()
-        yf = f_fit(xp, *fit)
-        
-        ax.set_xlim(xlim)
-        ax.set_ylim(ylim)
-        
-        ax.plot(xp, yf, color = color, alpha = .5, label = label, linewidth = 1)
-        if callable(f_fit.sf):
-            s_yf = f_fit.sf(xp, *fit, cov = cov)
-            ax.fill_between(xp, yf-s_yf, yf+s_yf, color = color, alpha = .2)
-        
-        
-        
-        if show_fit_result is True:
-            add_fit_parameters(ax, f_fit, fit, np.diag(cov)**.5, units = ["", "PE/keV"])
-
-                   
-        addlabel(ax, f"$g_1: {tex_value(g1, sg1, 'PE/γ')}$")
-        addlabel(ax, f"$g_2: {tex_value(g2, sg2, 'PE/e')}$")
-
-        ax.legend(loc = "lower left", fontsize = 8)
-    return(g1, g2, sg1, sg2)
-                 
+    print("please use doke.fit_df(ds, *args, **kwargs)")
     
 

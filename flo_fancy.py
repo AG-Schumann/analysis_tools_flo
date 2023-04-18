@@ -249,8 +249,8 @@ def tex_value(x, sx = None, unit = "", max_exp_diff = 4, lim = (-1,2), digits = 
         str_unit = f"\, {unit_tex}" 
 
     if False not in bool_bracket:
-        str_brl = "("
-        str_brr = ")"
+        str_brl = "\\left("
+        str_brr = "\\right)"
 
 
     out = f"{str_brl}{str_x}{str_sx}{str_brr}{str_exp}{str_unit}"
