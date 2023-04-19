@@ -39,8 +39,8 @@ def get_df_from_ds(
         
         _, s1, s2 = flo_fancy.remove_zero((s1 > 0) & (s2 > 0), s1, s2)
 
-        x, spr_x, sx = fhist.median_gauss(s1/E, strict_positive=True, ax = ax)
-        y, spr_y, sy = fhist.median_gauss(s2/E, strict_positive=True, ax = ax)
+        x, spr_x, sx = fhist.median_gauss(s1, strict_positive=True, ax = ax)
+        y, spr_y, sy = fhist.median_gauss(s2, strict_positive=True, ax = ax)
 
 
         doke_df = doke_df.append(
@@ -55,10 +55,17 @@ def get_df_from_ds(
             ignore_index = True
         )
         
-        doke_df["x"] = doke_df["S1"] / 1000*W
-        doke_df["y"] = doke_df["S2"] / 1000*W
-        doke_df["sx"] = doke_df["sS1"] /1000*W
-        doke_df["sy"] = doke_df["sS2"] / 1000*W
+        
+        
+        doke_df["S1oE"] = doke_df["S1"] / doke_df["E"]
+        doke_df["S2oE"] = doke_df["S2"] / doke_df["E"]
+        doke_df["sS1oE"] = doke_df["sS1"] / doke_df["E"]
+        doke_df["sS2oE"] = doke_df["sS2"] / doke_df["E"]
+        
+        doke_df["x"] = doke_df["S1oE"] / 1000*W
+        doke_df["y"] = doke_df["S2oE"] / 1000*W
+        doke_df["sx"] = doke_df["sS1oE"] /1000*W
+        doke_df["sy"] = doke_df["sS2oE"] / 1000*W
         
     return(doke_df)
 
@@ -114,7 +121,7 @@ def df_plot(
         if per_quanta is True:
             x, y, sy, sx = row["x"], row["y"], row["sy"], row["sx"]
         else:
-            x, y, sy, sx = row["S1"], row["S2"], row["sS2"],row["sS1"]
+            x, y, sy, sx = row["S1oE"], row["S2oE"], row["sS2oE"],row["sS1oE"]
         
         if add_labels:
             label = row["label"]

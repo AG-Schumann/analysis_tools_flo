@@ -711,6 +711,45 @@ def f_sigmoid(x, mu=0, sigma=1, y0=0, y1=1):
         (y1-y0)/(1+(np.exp((mu-np.array(x))/sigma)))+y0
     )
 
+def f_ssigmoid(x, mu, sigma, y0, y1, sfit = False, cov = False):
+    if (sfit is False) and (cov is False):
+        print("\33[31mno uncertaintys given for f_ssigmoid (set either sfit or cov)\33[0m")
+        return(np.zeros_like(x))
+    if (cov is False):
+        cov_musigma = cov_muy0 = cov_muy1 = cov_sigmay0 = cov_sigmay1 = cov_y0y1 = 0
+    else: 
+        cov_musigma, cov_muy0, cov_muy1, cov_sigmay0, cov_sigmay1, cov_y0y1 = \
+        cov[0,1], cov[0,2], cov[0,3], cov[1,2], cov[1,3], cov[2,3]
+    if (sfit is False):
+        smu, ssigma, sy0, sy1 = np.diag(cov)**.5
+    else:
+        smu, ssigma, sy0, sy1 = sfit
+    
+    
+    d_mu = sigma * (y0-y1)*np.exp(mu+x) / (np.exp(mu) + sigma * np.exp(x))**2
+    d_sigma = (y1-y0)*np.exp(mu + x) / (np.exp(mu + sigma * np.exp(x)))**2
+    d_y0 = np.exp(mu) / (np.exp(mu) + sigma * np.exp(x))
+    d_y1 = sigma * np.exp(x) / (np.exp(mu) + sigma * np.exp(x))
+    
+    d_mu[~np.isfinite(d_mu)] = 0
+    d_sigma[~np.isfinite(d_sigma)] = 0
+    d_y0[~np.isfinite(d_y0)] = 0
+    d_y1[~np.isfinite(d_y1)] = 0
+    
+    return(
+        (
+              (d_mu * smu)**2
+            + (d_sigma * ssigma)**2
+            + (d_y0 * sy0)**2
+            + (d_y1 * sy1)**2
+            + (d_mu * d_sigma * cov_musigma)
+            + (d_mu * d_y0 * cov_muy0)
+            + (d_mu * d_y1 * cov_muy1)
+            + (d_sigma * d_y0 * cov_sigmay0)
+            + (d_sigma * d_y1 * cov_sigmay1)
+            + (d_y0 * d_y1 * cov_y0y1)
+        )**.5
+    )
 
 
 def f_p0_sigmoid(x, y):
@@ -723,6 +762,7 @@ def f_p0_sigmoid(x, y):
 
 sigmoid = fit_function(
     f = f_sigmoid,
+    sf = f_ssigmoid,
     f_p0 = f_p0_sigmoid,
     description = "sigmoid function",
     parameters = ["mu", "sigma", "y0", "y1"],

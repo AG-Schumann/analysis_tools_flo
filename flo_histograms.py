@@ -301,10 +301,17 @@ def errorbar(
     if slimit is not False:
         if slimit is True:
             slimit = 10 * np.median(clean(sy))
+        sy[~np.isfinite(sy)] = slimit  * 100
+            
         if isinstance(ax2, plt.Axes):
             ax2.errorbar(x, y, yerr = sy, xerr = sx, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
-            
-        _, x, y, sy, sx = remove_zero(np.abs(sy) < np.abs(slimit), x, y, sy, sx)
+        
+        
+        if len(np.shape(sy)) == 2:
+            sy_ = np.max(sy, axis = 0)
+        else:
+            sy_ = sy
+        _, x, y, sy, sx = remove_zero(np.abs(sy_) < np.abs(slimit), x, y, sy, sx)
     
     ax.errorbar(x, y, yerr = sy, xerr = sx, label = label, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
 
