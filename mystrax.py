@@ -492,6 +492,7 @@ def load(
     runs, target,
     context = False,
     config = False,
+    mconfig = None,
     check_load = True,
     v = True,
     correct = True,
@@ -513,6 +514,8 @@ def load(
             if False uses default configs:
                 - mystrax.default_config for runs that start with sp_krypton
                 - {} for everythin else
+        mconfig (None): modifiying automatic config
+            (overwrites default configs settings if names match)
         check load: check if the data is available before attmepting to load it
             use a string of a different target to check the existance of that data to load this data
             set to false if you want to skip all checks
@@ -532,6 +535,10 @@ def load(
         context = context_sp
     if config is False:
         config = find_config(target)
+    
+    if isinstance(mconfig, dict):
+        config = {**config, **mconfig}
+    
     
     runs = rs(runs)
     if check_load is not False:
