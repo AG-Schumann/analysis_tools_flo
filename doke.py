@@ -39,33 +39,28 @@ def get_df_from_ds(
         
         _, s1, s2 = flo_fancy.remove_zero((s1 > 0) & (s2 > 0), s1, s2)
 
-        x, spr_x, sx = fhist.median_gauss(s1, strict_positive=True, ax = ax)
-        y, spr_y, sy = fhist.median_gauss(s2, strict_positive=True, ax = ax)
+        S1, spr_S1, sS1 = fhist.median_gauss(s1, strict_positive=True, ax = ax)
+        S2, spr_S2, sS2 = fhist.median_gauss(s2, strict_positive=True, ax = ax)
 
 
+        out = {
+            "S1": S1,
+            "S2": S2,
+            "sS1": sS1,
+            "sS2": sS2,
+            "E": E,
+            "label": f"{label_prefix}{E:.1f} keV{label_suffix}",
+        }
+        for s_, l in [("S1","x") ("S2", "y"), ("sS1", "sx"), ("sS2", "sy")]:
+            soe = out["f{s_}"] / E
+            out[f"{s_}oe"] = soe
+            out[f"{l}"] = soe / 1000*W
+            
         doke_df = doke_df.append(
-            {
-                "S1": x,
-                "S2": y,
-                "sS1": sx,
-                "sS2": sy,
-                "E": E,
-                "label": f"{label_prefix}{E:.1f} keV{label_suffix}",
-            },
+            out,
             ignore_index = True
         )
         
-        
-        
-        doke_df["S1oE"] = doke_df["S1"] / doke_df["E"]
-        doke_df["S2oE"] = doke_df["S2"] / doke_df["E"]
-        doke_df["sS1oE"] = doke_df["sS1"] / doke_df["E"]
-        doke_df["sS2oE"] = doke_df["sS2"] / doke_df["E"]
-        
-        doke_df["x"] = doke_df["S1oE"] / 1000*W
-        doke_df["y"] = doke_df["S2oE"] / 1000*W
-        doke_df["sx"] = doke_df["sS1oE"] /1000*W
-        doke_df["sy"] = doke_df["sS2oE"] / 1000*W
         
     return(doke_df)
 

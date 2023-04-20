@@ -394,7 +394,7 @@ def f_poly_0(x, c):
     
 def f_p0_poly_0(x, y):
     x_, y_ = clean(x, y)
-    return(np.mean(y))
+    return([np.mean(y)])
 
 def f_spoly_0(x, c, sfit = False, cov = False):
     if (sfit is False) and (cov is False):
@@ -489,7 +489,7 @@ def f_spoly_2(x, a2, a1, a0, sfit = False, cov = False):
     d0 = 1
      
     return((
-          (d2**2 * sa2**2) + (d1**2 * sa1**2) + (d0**2 * sa0**2)
+          (d2 * sa2)**2 + (d1* sa1)**2 + (d0* sa0)**2
         + 2*cov_01*d0*d1 + 2*cov_02*d0*d2 + 2*cov_12*d1*d2
         
     )**.5)

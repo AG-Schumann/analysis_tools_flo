@@ -1350,6 +1350,7 @@ def get_linage_todo(
     run,
     target,
     config = False,
+    mconfig = None,
     context = False,
     verbose = True,
 ):
@@ -1358,7 +1359,11 @@ def get_linage_todo(
         if verbose: print(f"{tcol}context\33[0m: default to context_sp")
     if config is False:
         config = find_config(target)
-        if verbose: print(f"{tcol}config\33[0m: {config}")
+
+    if isinstance(mconfig, dict):
+        config = {**config, **mconfig}
+    
+    if verbose: print(f"{tcol}config\33[0m: {config}")
     load_order = get_load_order(target)
     
     todo = []
@@ -1382,6 +1387,7 @@ def process_linage(
     target,
     context = False,
     config = False,
+    mconfig = None,
     todo = False,
     process = True,
     verbose = True,
@@ -1395,7 +1401,7 @@ def process_linage(
             print(f"{i_r+1}/{len(run)}: {r}")
             process_linage(
                 r, target = target,
-                context = context, config = config,
+                context = context, config = config, mconfig = mconfig,
                 todo = todo, process = process,
                 verbose = verbose, title = title,
             )
@@ -1412,6 +1418,7 @@ def process_linage(
                 run = run,
                 target = target,
                 config = config,
+                mconfig = mconfig,
                 context = context,
                 verbose = verbose,
             )
@@ -1424,6 +1431,7 @@ def process_linage(
                 _ = load(
                     run, target_todo,
                     config = config,
+                    mconfig = mconfig,
                     context = context,
                     v = False, 
                     check_load = False,

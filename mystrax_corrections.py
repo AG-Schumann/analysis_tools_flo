@@ -58,8 +58,8 @@ def correct_S2(
     # print(f"elt: {lifetime:.1f} µs")
     
     dft_c = ds[id_bool]["drifttime_corrected"]
-    if not np.any(dft_c > 0):
-        raise ValueError("S2 correction requires corrected drifttime")
+    # if not np.any(dft_c > 0):
+        # raise ValueError("S2 correction requires corrected drifttime")
         
     
     id_bool = id_bool & (ds["drifttime_corrected"] > 0)
@@ -94,8 +94,8 @@ def correct_S1(
     dft_correct_for = (tpc_info["dft_cath"]-tpc_info["dft_gate"])/2
     
     dftc = ds[id_bool]["drifttime_corrected"]
-    if not np.any(dftc > 0):
-        raise ValueError("S1 correction requires corrected drifttime")
+    # if not np.any(dftc > 0):
+        # raise ValueError("S1 correction requires corrected drifttime")
     
     f = ff.poly_1
     
