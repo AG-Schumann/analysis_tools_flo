@@ -12,7 +12,6 @@ import flo_histograms as fhist
 
 
 
-
 def get_df_from_ds(
     ds,
     Energys = True,
@@ -51,8 +50,8 @@ def get_df_from_ds(
             "E": E,
             "label": f"{label_prefix}{E:.1f} keV{label_suffix}",
         }
-        for s_, l in [("S1","x") ("S2", "y"), ("sS1", "sx"), ("sS2", "sy")]:
-            soe = out["f{s_}"] / E
+        for s_, l in [("S1","x"), ("S2", "y"), ("sS1", "sx"), ("sS2", "sy")]:
+            soe = out[f"{s_}"] / E
             out[f"{s_}oe"] = soe
             out[f"{l}"] = soe / 1000*W
             
@@ -63,9 +62,6 @@ def get_df_from_ds(
         
         
     return(doke_df)
-
-
-#
 
 
 

@@ -484,13 +484,13 @@ def f_spoly_2(x, a2, a1, a0, sfit = False, cov = False):
     else:
         sa2, sa1, sa0 = sfit
     
-    d2 = 2*a2*x
+    d2 = x**2
     d1 = x
     d0 = 1
      
     return((
-          (d2 * sa2)**2 + (d1* sa1)**2 + (d0* sa0)**2
-        + 2*cov_01*d0*d1 + 2*cov_02*d0*d2 + 2*cov_12*d1*d2
+          (d2 * sa2)**2 + (d1 * sa1)**2 + (d0 * sa0)**2
+        + cov_01*d0*d1 + cov_02*d0*d2 + cov_12*d1*d2
         
     )**.5)
 
