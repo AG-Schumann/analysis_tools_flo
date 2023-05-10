@@ -24,9 +24,11 @@ import flo_functions as ff
 
 default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
-def cmaps_default_colors():
+def cmaps_default_colors(base_color = "white", colors = True):
+    if not isinstance(colors, np.ndarray):
+        colors = default_colors
     return(
-        [mpl.colors.LinearSegmentedColormap.from_list("", ["white", color]) for color in default_colors]
+        [mpl.colors.LinearSegmentedColormap.from_list("", [base_color, color]) for color in default_colors]
     )
 
 
@@ -651,7 +653,7 @@ def s_pois(counts, rng = .682, return_range = False):
     
 
 
-def binning(x, y, bins, label="bc", fmt = ".1f"):
+def binning(x, y, bins, label=None, fmt = ".1f"):
     '''
     returns y sorted into x-bins
     x and y need to have the same form
@@ -663,20 +665,26 @@ def binning(x, y, bins, label="bc", fmt = ".1f"):
     '''
 
     bin_centers = get_bin_centers(bins)
-    bin_ids = np.digitize(x, bins)
+    bin_ids = np.digitize(x, bins)-1
     
     if label == "br":
         bnames = [f"{x:{fmt}} to {y:{fmt}}" for x, y in zip(bins[:-1], bins[1:])]
-    else:
+    elif label == "bc":
         bnames = [f"{c:{fmt}}" for c in bin_centers]
-    
+    else:
+        bnames = [c for c in bin_centers]
     
 
-    bin_contents = {bn:[] for bn in bnames}
-    _ = [bin_contents[bnames[i-1]].append(y_) for i, y_ in zip(bin_ids, y) if (i > 0) & (i <= len(bin_centers))]
-    
+    bin_contents = {bin_name: y[bin_ids==bin_id] for bin_id, bin_name in zip(range(len(bins)), bnames)}
     return(bin_contents)
-
+    
+def dynamic_binning(x, y, N = 50):
+    x_sorted = np.sort(x)
+    bins = x_sorted[[*np.array(np.arange(0,len(x)-1, N)), len(x)-1]]
+    data = binning(x, y, bins = bins)
+    
+    return(bins, data)
+    
 
 def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=10, path_medians = False, xlabel= "value", title = "", strict_positive = False, md_min_value = False, ax = False, color  = True):
     '''
@@ -690,7 +698,7 @@ def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=10, path
         path_medians = False
         
     
-    binned_data = binning(x, y, bins)
+    binned_data = binning(x, y, bins, label = None)
     bc_all = get_bin_centers(bins)
     bw = np.diff(bins)
     
@@ -722,7 +730,7 @@ def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=10, path
                         
                         
                     res = {
-                        "bc": bc_i,
+                        "bc": bc,
                         "N": len(values),
                         "median": md,
                         "s_median": smd,
@@ -759,14 +767,33 @@ def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=10, path
 
 
 
-def draw_counts(ax, bc, counts, draw_unc = True, color = None, normalize = True, label = "", skip_zero = True, y_offset = 0):
+def draw_counts(
+    ax,
+    bc, counts, s_counts = False,
+    draw_unc = True,
+    color = None,
+    normalize = True,
+    label = "",
+    skip_zero = True,
+    y_offset = 0,
+    verbose = False,
+):
     if not isinstance(ax, plt.Axes):
         raise TypeError("ax must be of type plt.Axes")
+    
+    
 
-    if draw_unc is True:
+    
+    
+    if (s_counts is False):
         s_counts = s_pois(counts)
     else:
         s_counts = 0
+    
+    
+    if len(bc) == (len(counts)+1):
+        bc = get_bin_centers(bc)
+        
     
     n_tot = np.sum(counts)
     if n_tot == 0:
@@ -790,7 +817,7 @@ def draw_counts(ax, bc, counts, draw_unc = True, color = None, normalize = True,
     if draw_unc is True:
         ax.fill_between(bc, counts_plot-s_counts_plot[0], counts_plot+s_counts_plot[1], step = "mid", alpha = .2, color = color)
 
-
+    return(color)
 
 
 

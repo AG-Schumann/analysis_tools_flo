@@ -131,6 +131,53 @@ def draw_woa_single(
         ax.legend(loc = "upper right")
     return(color, n_count)
 
+
+def draw_woa_scatter(
+    ds,
+    ax = False,
+    draw = "0123",
+    plugin = "event_fits_summary",
+    labels_ = False,
+    field_a = "areas_corrected",
+    field_w = "widths",
+    colors = False, alpha = .01,
+    marker = ".",
+):
+
+    if ax is False:
+        ax = fhist.ax()
+
+    if colors is False:
+        colors = fhist.default_colors
+    
+    if labels_ is False:
+        labels_ = labels[plugin]
+        
+        
+    for i_draw, field_id_str, color in enumezip(draw, colors):
+        field_id = int(field_id_str)
+        label = labels_[field_id]
+        w = ds[field_w][:, field_id]
+        a = ds[field_a][:, field_id]
+        addlabel(ax, f"{label}", marker = "o", color = color )
+        ax.plot(
+            a, w,
+            linestyle = "",
+            marker = marker, markeredgewidth = 0,
+            alpha = alpha, color = color,
+        )
+    
+    ax.set_xlim(10,1e5)
+    ax.set_ylim(10,1e4)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_xlabel("area / PE")
+    ax.set_ylabel("width / ns")
+
+    ax.legend(loc = "upper right")
+    ax.grid()
+
+
 def draw_woa_multi(
     ds, ax = False, draw = "0123", plugin = "event_fits_summary", add_grid = True, show_only_max_count = True,
     vmin = 1, global_scale = False, show_counts = True, title = "", show_precut = False,
@@ -948,8 +995,76 @@ def draw_kr_event(
         except BaseException as e:
             print(e)
 
+def draw_kr_event_split(ev, title = "", same_xscale = True, show_areas = True, show_decaytime = False):
+
+    fig, axs = fhist.make_fig(1, 2, sharey = True, w = 3)
+    ax1, ax2 = axs
+    fig.suptitle(f"{title}")
 
 
+
+    axl = ax1.twiny()
+    axl.set_axis_off()
+
+    if ev["s2_split"]:
+        labels = ["first S1", "second S1", "first S2", "second S2"]
+    else:
+        labels = ["first S1", "second S1", "S2"]
+
+
+    draw_kr_event(ax1, ev, show_peaks = "0", color = fhist.default_colors[0])
+    draw_kr_event(ax1, ev, show_peaks = "1", color = fhist.default_colors[1])
+
+    draw_kr_event(ax2, ev, show_peaks = "2", color = fhist.default_colors[2])
+    if ev["s2_split"]:
+        draw_kr_event(ax2, ev, show_peaks = "3", color = fhist.default_colors[3])
+    ax2.get_yaxis().set_visible(False)
+
+    
+    
+    for peak_i, label, color in enumezip(labels, fhist.default_colors):
+        
+        if show_areas is True:
+            area = ev[f"area_s{(peak_i>1)+1}{peak_i%2+1}"]
+            label = f"{label} ({area:.1f} PE)"
+        addlabel(axl, label, color = color, linestyle = "-")
+
+
+    ax2.set_xlabel("")
+    ax1.xaxis.set_label_coords(1,-0.1)
+    
+    xlim_1 = ax1.get_xlim()
+    xlim_2 = ax2.get_xlim()
+
+    w1 = (xlim_1[1]-xlim_1[0])/2
+    w2 = (xlim_2[1]-xlim_2[0])/2
+
+    m1 = xlim_1[0] + w1
+    m2 = xlim_2[0] + w2
+
+    w = max(w1, w2)
+    if same_xscale is True:
+        ax1.set_xlim(m1-w, m1+w)
+        ax2.set_xlim(m2-w, m2+w)
+    
+    
+    t1 = ax1.get_xticks()
+    t2 = ax2.get_xticks()
+    tl1 = ax1.get_xticklabels()
+    tl2 = ax2.get_xticklabels()
+
+    for ti in np.nonzero(t1 > m1 + w*.95)[0]:
+        plt.setp(tl1[ti], visible=False)
+    for ti in np.nonzero(t2 < m2 - w*.95)[0]:
+        plt.setp(tl2[ti], visible=False)
+
+    
+    ax1.spines['right'].set_visible(False)
+    ax2.spines['left'].set_color("grey")
+    
+    axl.legend(loc = "upper left")
+    plt.subplots_adjust(wspace = 0)
+    return(fig, axs)
 
 
 
@@ -1325,16 +1440,16 @@ def make_todo(kr):
 # processing data per run one plugin at a time is much faster and
 #   more reiliable than loading all at once
 
-def get_linage(target):
+def get_linage(target, context = context_sp):
     return(
-        context_sp.lineage(
+        context.lineage(
             run_id = 0,
             data_type = target
         )
     )
 
-def get_load_order(target):
-    linage = get_linage(target)
+def get_load_order(target, context = context_sp):
+    linage = get_linage(target, context = context)
     linage2 = {tar:len(get_linage(tar))-1 for tar in linage}
     
     target_order = [[]] * (max(linage2.values())+1)
@@ -1364,10 +1479,10 @@ def get_linage_todo(
         config = {**config, **mconfig}
     
     if verbose: print(f"{tcol}config\33[0m: {config}")
-    load_order = get_load_order(target)
+    load_order = get_load_order(target, context = context)
     
     todo = []
-    load_order = get_load_order(target)
+    load_order = get_load_order(target, context = context)
     
     for i_load, load in enumerate(load_order):
         check = context.is_stored(
@@ -1427,7 +1542,10 @@ def process_linage(
             if title is not False:
                 print(f"\n\033]0;{title}: {target_todo}\a", flush = True)
             if verbose: print(f"{tcol}{target_todo}\33[0m is being loaded")
-            if process is True:
+            if target_todo == "raw_records":
+                print(f"  \33[31m!!!raw records do not exist for run {run}, skipping!!!\33[0m")
+                break
+            elif process is True:
                 _ = load(
                     run, target_todo,
                     config = config,

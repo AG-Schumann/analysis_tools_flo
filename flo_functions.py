@@ -91,12 +91,13 @@ def fit(
     kwargs_plot = None,
     return_cov = False,
     return_output = False,
+    return_as_dict = False,
     scale_plot = 1,
     absolute_sigma = True,
     xp = True,
     show_fit_uncertainty = False,
     ODR = False,
-    fixed_values = None
+    fixed_values = None,
 ):
     output = False
     
@@ -151,7 +152,7 @@ def fit(
             
             if not isinstance(p0, np.ndarray):
                 p0 = np.array([p0])
-            
+            p0_all = p0
             try:
                 qp(f"- p0 all: {p0}", verbose = verbose, end = "\n")
                 if (p0 is not False) and (len(ids_free) != len(f)):
@@ -329,7 +330,19 @@ def fit(
             out = out[:3]
 
         qp(f"- returning all", verbose = verbose, end = "\n")
+        
+        if return_as_dict is True:
+            out = dict(
+                fit = fit_out,
+                cov = cov_out,
+                chi2 = chi2,
+                output = output,
+                p0 = p0_all,
+            )
+        
         return(out)
+        
+        
             
     except Exception as e:
         print(e)
@@ -364,7 +377,7 @@ def add_fits_result_to_df(df, f, fit_result, dict_append = None):
         if "sfit" in fit_result:
             sfit = fit_result["sfit"]
         
-        
+    
     elif len(fit_result) == 2:
         fit, sfit = fit_result
     elif len(fit_result) == 3:
@@ -376,7 +389,7 @@ def add_fits_result_to_df(df, f, fit_result, dict_append = None):
         out["cov"] = cov
     else:
         raise TypeError
-        
+    out["fit"] = fit
     
     
     
@@ -639,7 +652,7 @@ def f_p0_erf(x, y):
 erf = fit_function(
     f = f_erf,
     f_p0 = f_p0_erf,
-    description = "erro function",
+    description = "error function",
     parameters = ["mu", "sigma", "y0", "y1"],
     parameters_tex = ["\\mu", "\\sigma", "y_{{0}}", "y_{{1}}"],
     formula = "erf(x; mu, sigma, y0, y1)",
@@ -672,7 +685,7 @@ def f_p0_erf_lin(x, y):
 erf_lin = fit_function(
     f = f_erf_lin,
     f_p0 = f_p0_erf_lin,
-    description = "erro function multiplied by (a*x + 1)",
+    description = "error function multiplied by (a*x + 1)",
     parameters = ["mu", "sigma", "y0", "y1", "a"],
     parameters_tex = ["\\mu", "\\sigma", "y_{{0}}", "y_{{1}}", "a"],
     formula = "erf(x; mu, sigma, y0, y1,)*(a*x + 1)",
@@ -1025,7 +1038,7 @@ def f_sexp_turn_on(t, t_0, tau, a, A, sfit = False, cov = False):
     dtau = A * (t-t_0) * np.exp(-(t-t_0)*(a-tau)/a * tau)/tau**2
     da =   A * (t_0-t) * np.exp((t_0-t)/tau - (t_0-t)/a)/a**2
     dA =   1/(1+np.exp((t_0-t)/a)) * np.exp((t_0-t)/tau)
-     
+    
     return((
           (dt_0**2 * st_0**2) + (dtau**2 * stau**2) + (da**2 * sa**2) + (dA**2 * sA**2)
         + 2*cov_01*dt_0*dtau + 2*cov_02*dt_0*da + 2*cov_03*dt_0*dA
@@ -1034,9 +1047,6 @@ def f_sexp_turn_on(t, t_0, tau, a, A, sfit = False, cov = False):
     )**.5)
 
  
-
-
-
 
 
 exp_turn_on = fit_function(
@@ -1057,22 +1067,56 @@ exp_turn_on = fit_function(
 
 
 # diffusion function
-def f_diffusion(t, D, w_0, v_d = 6.9/40_000):
+def f_diffusion(t, D, sigma_0, v_d = 6.9/40_000):
     return(
-        (2 * D/v_d**2 * t + w_0**2)**.5 
+        (2 * D/v_d**2 * t + sigma_0**2)**.5 
     )
 def f_p0_diffusion(t, w, v_d = 6.9/40_000):
     return(np.median(w**2 / t)/2*v_d**2, np.min(w), v_d)
+
+def f_sdiffusion(t, D, sigma_0, v_d, sfit=False, cov=False):
+    if (sfit is False) and (cov is False):
+        print("\33[31mno uncertaintys given for f_sdoke (set either sfit or cov)\33[0m")
+        return(np.zeros_like(x))
+    if (cov is False):
+        cDs = cDv = csv = 0
+    else: 
+        cDs, cDv, csv = cov[0,1], cov[0,2], cov[1,2]
+    
+    if (sfit is False):
+        sD, ss, sv = np.diag(cov)**.5
+    else:
+        sD, ss, sv = sfit
+    
+    
+    dD = t / (v_d * ((2 * D * t / v_d) + sigma_0)**.5)
+    ds = 1 / (2 * ((2 * D * t / v_d) + sigma_0)**.5)
+    dv = -D*t / (v_d**2 * ((2 * D * t / v_d) + sigma_0)**.5)
+    
+    sy = (
+          (dD * sD)**2
+        + (ds * ss)**2
+        + (dv * sv)**2
+        + (dD * ds * cDs)
+        + (dD * dv * cDv)
+        + (ds * dv * csv)
+    )**.5
+    
+    return(sy)
+    
+    
     
 diffusion  = fit_function(
     f = f_diffusion,
     f_p0 = f_p0_diffusion,
+    sf = f_sdiffusion,
     description = "Diffusion formula w = √(2Dt+w0²)",
     short_description = "",
-    parameters = ["D", "w0", "v_d"],
-    parameters_tex = ["D", "w_0", "v_\\mathrm{{drift}}"],
-    formula = "√(2D/v_d t+w_0²)",
-    formula_tex = "$\\sqrt{\\frac{{2 D\ t}}{{v_\\mathrm{{drift}}}}+w_0^2}$",
+    parameters = ["D", "sigma_0", "v_d"],
+    parameters_tex = ["D", "\\sigma_0", "v_\\mathrm{{drift}}"],
+    formula = "√(2D/v_d t+σ_0²)",
+    formula_tex = "$\\sqrt{\\frac{{2 D\ t}}{{v_\\mathrm{{drift}}}}+\\sigma_0^2}$",
+    units = ["cm²/s", "ns", "cm/ns"],
 )
 
 

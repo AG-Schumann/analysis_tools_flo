@@ -259,9 +259,13 @@ def tex_value(x, sx = None, unit = "", max_exp_diff = 4, lim = (-1,2), digits = 
     
     
     
-    
-    
-    
+def calc_exp_integral_normalized(tau, t0 = 0, t1 = np.inf):
+    '''
+    multiply by tau to get the actual integraal
+    '''
+    return(
+        np.exp(-t0/tau) - np.exp(-t1/tau)
+    )
     
     
     
