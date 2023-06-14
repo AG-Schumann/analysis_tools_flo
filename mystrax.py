@@ -824,13 +824,8 @@ def get_unit_sp(x):
 
 
 
-print(f"{tcol}Python:\33[0m")
-print(sys.executable)
-print(sys.version)
-print(sys.version_info)
 
 folder_cache = "/data/storage/strax/cached/singlephase"
-print(f"{tcol}Import done at {datetime.now()}\33[0m")
 
 
 
@@ -1816,3 +1811,13 @@ def label_filters(ax, filters, loc = "upper right"):
             
             
             
+
+
+
+
+
+print(f"{tcol}Python:\33[0m")
+print(sys.executable)
+print(sys.version)
+print(sys.version_info)
+print(f"{tcol}Import done at {datetime.now()}\33[0m")

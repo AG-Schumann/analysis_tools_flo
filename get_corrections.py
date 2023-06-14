@@ -15,6 +15,7 @@ from datetime import datetime
 path_fields = "/data/workspace/Flo/library_flo/files/fields.xls"
 fields_df = pd.read_excel(path_fields)
 
+fields = {x["field_id"]:x for x in fields_df.to_dict(orient = "records")}
 
 
 

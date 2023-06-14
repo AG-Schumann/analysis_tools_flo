@@ -1232,3 +1232,50 @@ moyal = fit_function(
     docstring = ''''''
 ) 
 
+
+
+# exponential decay shifted to omit overflow errors
+def f_exp_decay_shift(t, A, tau, mu = 0):
+    return(A*np.exp(-(t-mu)/tau))
+
+def f_p0_exp_decay_shift(t, y, A = True, tau = True, mu = True):
+    order = np.argsort(t)
+    x_ = t[order]
+    y_ = y[order]
+    
+    y_cs = np.cumsum(y_)
+    y_cs = y_cs/y_cs[-1]
+
+    id_max = np.argmax(y_)
+    
+    diffs = np.interp([.05, 0.15], y_cs, x_)
+    
+    if A is True:
+        A = y_[id_max]
+    if mu is True:
+        mu = diffs[1]
+    if tau is True:
+        y_ref = np.abs(A*np.exp(-1) - y_[id_max:])
+        tau = t[np.argmin(y_ref)+id_max] - t[id_max]
+    
+    return(A, tau, mu)
+
+
+
+exp_decay_shift = fit_function(
+    f = f_exp_decay_shift,
+    f_p0 = f_p0_exp_decay_shift,
+    description = "exponential decay that is shifted (reduces overflows)",
+    short_description = "exp decay shifted",
+    parameters = ["A", "tau", "mu"],
+    parameters_tex = ["A", "\\tau", "\\mu"],
+    formula = "A exp(-(t-mu) / tau)",
+    formula_tex = "$A \\cdot \\exp{{(-(t-\\mu) / \\tau)}}$",
+    docstring = '''
+An exponential decay that coverges to zero
+usage: y = exp_decayC(x; A, tau, mu = 0)
+'''
+)
+
+
+

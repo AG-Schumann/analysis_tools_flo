@@ -261,7 +261,8 @@ def tex_value(x, sx = None, unit = "", max_exp_diff = 4, lim = (-1,2), digits = 
     
 def calc_exp_integral_normalized(tau, t0 = 0, t1 = np.inf):
     '''
-    multiply by tau to get the actual integraal
+    Analytical calculation of the normalized integral over exp(-t/tau) from t0 (0) to t1 (inf).
+    Multiply by tau to get the actual integral.
     '''
     return(
         np.exp(-t0/tau) - np.exp(-t1/tau)

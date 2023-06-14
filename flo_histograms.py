@@ -177,6 +177,7 @@ def make_fig(
     rax = True,
     n_tot = False,
     axis_off = False,
+    custom_style = False,
     *args, **kwargs):
     '''
     creates a figure with nrows by ncols plots
@@ -203,17 +204,18 @@ def make_fig(
             ncols, nrows = nrows, ncols
     
     fig, axs = plt.subplots(nrows, ncols, *args, **kwargs)
-    plt.subplots_adjust(
-        left = .15,
-        right = .98,
-        top = .90,
-        bottom = .15,
-        hspace = .3,
-        wspace = .3,
-    )
-    fig.set_size_inches(ncols*w, nrows*h)
-    fig.set_facecolor("white")
-    fig.set_dpi(200)
+    if custom_style is False:
+        plt.subplots_adjust(
+            left = .15,
+            right = .98,
+            top = .90,
+            bottom = .15,
+            hspace = .3,
+            wspace = .3,
+        )
+        fig.set_size_inches(ncols*w, nrows*h)
+        fig.set_facecolor("white")
+        fig.set_dpi(200)
     
     if rax is True:
         if isinstance(axs, plt.Axes):
