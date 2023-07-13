@@ -287,7 +287,8 @@ def errorbar(
     ax, x, y, sy,
     sx = None,
     ax2 = False,
-    color = None, capsize = 5,
+    color = None,
+    capsize = 0, capthick = 0,
     linestyle = "", label = "",
     marker = "", plot = False,
     slimit = False,
@@ -308,7 +309,7 @@ def errorbar(
         sy[~np.isfinite(sy)] = slimit  * 100
             
         if isinstance(ax2, plt.Axes):
-            ax2.errorbar(x, y, yerr = sy, xerr = sx, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
+            ax2.errorbar(x, y, yerr = sy, xerr = sx, color = color, capsize=capsize, capthick=capthick, linestyle=linestyle, marker=marker, *args, **kwargs)
         
         
         if len(np.shape(sy)) == 2:
@@ -317,7 +318,7 @@ def errorbar(
             sy_ = sy
         _, x, y, sy, sx = remove_zero(np.abs(sy_) < np.abs(slimit), x, y, sy, sx)
     
-    ax.errorbar(x, y, yerr = sy, xerr = sx, label = label, color = color, capsize=capsize, linestyle=linestyle, marker=marker, *args, **kwargs)
+    ax.errorbar(x, y, yerr = sy, xerr = sx, label = label, color = color, capsize=capsize, capthick=capthick, linestyle=linestyle, marker=marker, *args, **kwargs)
 
     return(color)
 
@@ -333,9 +334,14 @@ def median_gauss(
     bining_width_in_mads = 4,
     show_p0 = False,
     show_bw = False,
+    show_f = False,
+    show_gof = False,
     return_chi2 = False,
     return_all = False,
     strict_positive = False,
+    label = "data",
+    capsize = 0,
+    capthick = 0,
     *args, **kwargs
 ):
     '''
@@ -398,12 +404,15 @@ parameters:
     s_density = s_counts / bw
     p0 = f.p0(bc, counts)
     
+    color = False
     if isinstance(ax, plt.Axes):
         xf = np.linspace(min(bins), max(bins), 1000)
-        errorbar(
+        color = errorbar(
             ax, bc, counts, s_counts,
-            label = f"data (N = {np.sum(counts):.0f}; input: {len(values)})",
+            label = f"{label} (N = {np.sum(counts):.0f}/{len(values)})",
             plot = True,
+            capsize = capsize,
+            capthick = capthick,
         )
         if show_bw is True:
             str_bw = (", ").join(np.unique([f"{bwi:.3g}" for bwi in bw]))
@@ -412,7 +421,7 @@ parameters:
         if show_p0 is True:
             y0 = f(xf, *p0)
             ax.plot(xf, y0, label = "p0")
-            for p, v in zip(f, p0):
+            for par_i, p, v in enumezip(f, p0):
                 add_fit_parameter(ax, p, v)
         
     
@@ -453,10 +462,16 @@ parameters:
         if isinstance(ax, plt.Axes):
             
             yf = f(xf, *fit)
-            addlabel(ax, f)
-            ax.plot(xf, yf, label = f"fit {chi2[-1]}")
-            for par, val, sval in zip(f, fit, sfit):
-                add_fit_parameter(ax, par, val, sval)
+            if show_f is True:
+                addlabel(ax, f)
+            if show_gof is True:
+                label_f = f"fit {chi2[-1]}"
+            else:
+                label_f = ""
+            ax.plot(xf, yf, label = label_f, color = color)
+            for i_par, par, val, sval in enumezip(f, fit, sfit):
+                if i_par > 0:
+                    add_fit_parameter(ax, par, val, sval)
             ax.legend(loc = "upper right")
             ax.set_ylabel("counts")
         
@@ -779,6 +794,7 @@ def draw_counts(
     skip_zero = True,
     y_offset = 0,
     verbose = False,
+    **kwargs
 ):
     if not isinstance(ax, plt.Axes):
         raise TypeError("ax must be of type plt.Axes")
@@ -815,7 +831,7 @@ def draw_counts(
     
     counts_plot += y_offset
     
-    color = ax.plot(bc, counts_plot, drawstyle = "steps-mid", label = f"{label}", color = color)[0].get_color()
+    color = ax.plot(bc, counts_plot, drawstyle = "steps-mid", label = f"{label}", color = color, **kwargs)[0].get_color()
     if draw_unc is True:
         ax.fill_between(bc, counts_plot-s_counts_plot[0], counts_plot+s_counts_plot[1], step = "mid", alpha = .2, color = color)
 
@@ -1024,6 +1040,32 @@ def get_peaks_from_time_tuple(peaks, time_tuple):
 def get_bin_centers(bins):
     return(np.array([ np.mean([x1, x2]) for x1, x2 in zip(bins[:-1], bins[1:])]))
 
+
+def remove_outliers(x, scale = 3, left = True, right = True):
+    '''
+    Cuts away walues that are multiple median absolute deviations away from the median.
+    Returns cut values as numpy array
+    
+    parameters:
+        x: the input array to filter
+        
+        scale (3): the maximum amount of MADs the values are alowed to differ from the median
+        left/right (True): wheter to cut on the left or right side
+     
+    '''
+    
+    
+    # cast to array and create copy(!)
+    x_ = np.array(x)
+    
+    md, mad, *_ = median(x_)
+    
+    if left is True:
+        x_ = x_[x_ >= (md - mad * scale)]
+    if right is True:
+        x_ = x_[x_ <= (md + mad * scale)]
+    
+    return(x_)
 
 
 

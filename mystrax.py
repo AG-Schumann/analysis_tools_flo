@@ -47,6 +47,10 @@ fields_df = gc.fields_df
 
 
 
+def time_from__id(_id):
+    return(datetime.fromtimestamp(int(str(_id)[:8], 16)))
+
+
 
 
 def get_field(ds, field, prio_identical = True):

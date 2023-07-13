@@ -21,25 +21,61 @@ def get_df_from_ds(
     label_prefix = "$^{{83}}$Kr: ",
     label_suffix = "",
     doke_df = False,
-    ax = False,
+    axs = False,
+    title = "",
+    verbose = False,
     
 ):
     if Energys is True:
         Energys = [9.4053, 32.1516, 41.5569] # keV
     if field_ids is True:
         field_ids = [(1,3), (0,2)]#, (6,7)]
-    
-    
+    if axs is False:
+        axs = [False, False] * len(Energys)
+    elif axs is True:
+        fig, axs = fhist.make_fig(min(len(Energys), len(field_ids)), 2, rax = False)
+        fig.suptitle(title)
+        
+    if verbose is True:
+        print(f"Energys: {Energys}")
+        print(f"field_ids: {field_ids}")
+        
+        
+
+        
     if not isinstance(doke_df, pd.DataFrame):
         doke_df = pd.DataFrame()
-    for E, fids in zip(Energys, field_ids):
+    
+    for i_E, E, fids in flo_fancy.enumezip(Energys, field_ids):
         signals = ds[field][:, fids]
         s1, s2 = signals[:,0], signals[:,1]
         
         _, s1, s2 = flo_fancy.remove_zero((s1 > 0) & (s2 > 0), s1, s2)
-
-        S1, spr_S1, sS1 = fhist.median_gauss(s1, strict_positive=True, ax = ax)
-        S2, spr_S2, sS2 = fhist.median_gauss(s2, strict_positive=True, ax = ax)
+        
+        ax1 = ax2 = False
+        if axs is not False:
+            if verbose is True:
+                print(f"plotting {E}")
+            try:
+                if len(axs.shape) == 2:
+                    ax1 = axs[0, i_E]
+                    ax2 = axs[1, i_E]
+                else:
+                    ax1 = axs[0]
+                    ax2 = axs[1]
+            
+                ax1.set_title(f"S1: {E:.1f} keV")
+                ax2.set_title(f"S2: {E:.1f} keV")
+                ax1.set_xlabel(f"corrected S1 area / PE")
+                ax2.set_xlabel(f"corrected S2 area / PE")
+                
+            except Exception as e:
+                    ax1 = ax2 = False
+                    if verbose is True:
+                        print(e)
+            
+        S1, spr_S1, sS1 = fhist.median_gauss(s1, strict_positive=True, ax = ax1)
+        S2, spr_S2, sS2 = fhist.median_gauss(s2, strict_positive=True, ax = ax2)
 
 
         out = {
@@ -52,7 +88,7 @@ def get_df_from_ds(
         }
         for s_, l in [("S1","x"), ("S2", "y"), ("sS1", "sx"), ("sS2", "sy")]:
             soe = out[f"{s_}"] / E
-            out[f"{s_}oe"] = soe
+            out[f"{s_}oE"] = soe
             out[f"{l}"] = soe / 1000*W
             
         doke_df = doke_df.append(
@@ -73,6 +109,7 @@ def df_plot(
     per_quanta = True,
     show_zero = True,
     add_labels = True,
+    add_text_inplot = False,
     ax2 = None
 ):
     
@@ -106,7 +143,7 @@ def df_plot(
         doke_df["label"] = ""
     else:
         label = ""
-        
+
     for i_row, row in doke_df.iterrows():
 
         if per_quanta is True:
@@ -126,12 +163,17 @@ def df_plot(
             capsize = 0,
             ax2 = ax2,
         )
+        
+        if add_text_inplot is True:
+            ax.text(x, y, f"  {label}", color = color, verticalalignment = "baseline")
+        
+        
     if per_quanta is True:
-        ax.set_xlabel("S1 / PE/γ")
-        ax.set_ylabel("S2 / PE/e")
+        ax.set_xlabel("SY W / PE/γ")
+        ax.set_ylabel("CY W / PE/e")
     else:
-        ax.set_xlabel("S1 / PE/keV")
-        ax.set_ylabel("S2 / PE/keV")
+        ax.set_xlabel("SY / PE/keV")
+        ax.set_ylabel("CY / PE/keV")
 
 
 def g1g2_uncertainty_from_doke_fit(
@@ -140,6 +182,7 @@ def g1g2_uncertainty_from_doke_fit(
     ax = False,
     color = None,
     fixed_values = None,
+    show_value_unc = False,
     verbose = False,
 ):
     
@@ -222,14 +265,16 @@ def g1g2_uncertainty_from_doke_fit(
         if "g2" in fixed_values:
             style_2["capsize"] = 0
         
-        fhist.errorbar(ax, g1, 0, sy = False, sx = [[sg1l], [sg1r]], plot = True, marker = "x", **style_1)
-        fhist.errorbar(ax, 0, g2, sg2, plot = True, marker = "*", **style_2)
+        if show_value_unc is True:
+            fhist.errorbar(ax, g1, 0, sy = False, sx = [[sg1l], [sg1r]], plot = True, marker = "x", **style_1)
+            fhist.errorbar(ax, 0, g2, sg2, plot = True, marker = "*", **style_2)
         
         
         flo_fancy.addlabel(ax, str_g1, color = color_g1, marker = "x")
         flo_fancy.addlabel(ax, str_g2, color = color_g2, marker = "*")
         
-        
+        ax.set_xlim(0)
+        ax.set_ylim(0)
         
     return((sg1l, sg1r), sg2)
 
