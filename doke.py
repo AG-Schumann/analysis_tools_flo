@@ -241,7 +241,7 @@ def g1g2_uncertainty_from_doke_fit(
     if isinstance(ax, plt.Axes):
         
         color = ax.plot(xp[ypg0], yp[ypg0], color = color)[0].get_color()
-        ax.fill_between(xp, syl, syh, alpha = .2, color = color)
+        ax.fill_between(xp, syl, syh, alpha = .2, color = color, linewidth = 0)
         
         
         if "g1" not in fixed_values:

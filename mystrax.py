@@ -923,6 +923,7 @@ def draw_kr_event(
     show_peaktime = False, label_peaktime = False,
     PE_ns = True,
     leg_loc = False, t_ref = 0, t0 = False,
+    yoffset = 0,
     **kwargs):
     '''
     plots S1s and S2s into ax
@@ -977,7 +978,7 @@ def draw_kr_event(
                 props = f" ({', '.join(props)})"
             else:
                 props = ""
-            plt_i = ax.plot(x, y, label = f"{label}{props}", **kwargs)[0]
+            plt_i = ax.plot(x, y+yoffset, label = f"{label}{props}", **kwargs)[0]
             
             if show_peaktime is True:
                 ax.axvline(event["time_peaks"][peak_i] + t_offset_abs, color = plt_i.get_color())

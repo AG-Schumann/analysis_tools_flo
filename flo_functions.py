@@ -295,7 +295,7 @@ def fit(
                     
                     s_yf = f.sf(xp, *fit_out, cov = cov_out)
                     qp(f"- type syf: {type(s_yf)}", verbose = verbose, end = "\n")
-                    ax.fill_between(xp, yf-s_yf, yf+s_yf, color = color, alpha = .2)
+                    ax.fill_between(xp, yf-s_yf, yf+s_yf, color = color, alpha = .2, linewidth = 0)
                     qp(f"- curve drawn", verbose = verbose, end = "\n")
                 except Exception as e:
                     qp(f"  - \33[31m{e}\33[0m", verbose = verbose, end = "\n")

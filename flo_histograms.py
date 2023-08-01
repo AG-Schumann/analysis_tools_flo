@@ -778,7 +778,11 @@ def get_binned_median(x, y, bins, f_median = median_gauss, n_counts_min=10, path
                 plt.subplots_adjust(top = .85)
                 plt.savefig(path_medians.replace("%BC%", f'{bc:.1f}'))
                 plt.close()
-            
+    
+    try:
+        df = df.astype({"N": int})
+    except KeyError:
+        pass
     return(df)
 
 
