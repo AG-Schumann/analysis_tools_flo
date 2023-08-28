@@ -919,7 +919,7 @@ def draw_gauss_peak(ax, p, t0 = False, show_pars = True, **kwargs):
 
 def draw_kr_event(
     ax, event,
-    show_peaks = "0123", label_area = True,
+    no_labels = False, show_peaks = "0123", label_area = True,
     show_peaktime = False, label_peaktime = False,
     PE_ns = True,
     leg_loc = False, t_ref = 0, t0 = False,
@@ -929,6 +929,7 @@ def draw_kr_event(
     plots S1s and S2s into ax
     
     parameters:
+    - no_labels: prevents the creaation of any labels
     - show peaks: string with numbers from 0 to 4 of whuich peaks to draw
       (default = "0123") ==> all 4 peaks are shown
     - show_peaktime:
@@ -978,7 +979,11 @@ def draw_kr_event(
                 props = f" ({', '.join(props)})"
             else:
                 props = ""
-            plt_i = ax.plot(x, y+yoffset, label = f"{label}{props}", **kwargs)[0]
+            if no_labels is True:
+                label_ = ""
+            else:
+                label_ = f"{label}{props}"
+            plt_i = ax.plot(x, y+yoffset, label = label_, **kwargs)[0]
             
             if show_peaktime is True:
                 ax.axvline(event["time_peaks"][peak_i] + t_offset_abs, color = plt_i.get_color())
