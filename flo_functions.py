@@ -1064,6 +1064,45 @@ exp_turn_on = fit_function(
 )
 
 
+# exponential decay with error function
+def f_experf(x, t_0, tau, A, sigma):
+    return(
+        A * np.exp(-(x-t_0)/tau) * 
+        (scipy.special.erf((x-t_0)/sigma/(2**.5))+1)/2
+    )
+
+def f_p0_experf(x, y, t_0=True, tau=True, A=True, sigma=True):
+    
+    cum = np.cumsum(y) / np.sum(y)
+    diff = np.diff(y)
+    
+    
+    if t_0 is True:
+        t_0 = x[np.argmax(diff)]
+    if tau is True:
+        # 1-np.exp(-1) == .632
+        tau = x[np.argmin(np.abs(cum - 0.632))]-t_0
+    if A is True:
+        A = np.max(y)
+    if sigma is True:
+        sigma = x[np.argmin(np.abs(cum - .2))]- x[np.argmin(np.abs(cum - .1))]
+    
+    p0 = (t_0, tau, A, sigma)
+    return(p0)
+
+
+
+exp_erf = fit_function(
+    f = f_experf,
+    f_p0 = f_p0_experf,
+    description = "exponential decay with erf turn on",
+    short_description = "exponential decay with erf turn on",
+    parameters = ["t_0", "tau", "A", "sigma"],
+    parameters_tex = ["t_0", "\\tau", "A", "\\sigma"],
+    docstring = '''
+'''
+)
+
 
 
 # diffusion function
