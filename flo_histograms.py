@@ -31,63 +31,6 @@ def cmaps_default_colors(base_color = "white", colors = True):
         [mpl.colors.LinearSegmentedColormap.from_list("", [base_color, color]) for color in default_colors]
     )
 
-
-def next_color(ax):
-    return(
-        ax.plot([])[0].get_color()
-    )
-
-
-
-def nice_log_label(ax, axis = "y", loglim = 3):
-    def nicelabel(l, exp):
-        if l == 0:
-            return("0")
-        else:
-            return(f"{l} x $10^{{{exp}}}$")
-
-    if axis == "y":
-        tp = ax.get_yticks()
-        
-    elif axis == "x":
-        tp = ax.get_xticks()
-    elif axis == "b":
-        nice_log_label(ax = ax, axis = "x", loglim = loglim)
-        nice_log_label(ax = ax, axis = "y", loglim = loglim)
-        return()
-import sys
-import numpy as np
-import pandas as pd
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-from matplotlib.patches import Rectangle
-import scipy.stats
-import scipy.optimize
-from scipy.special import erf
-from datetime import datetime
-import inspect
-from threading import Thread, Event
-
-
-# my packages
-from default_bins import *
-from flo_fancy import *
-import flo_functions as ff
-
-
-
-
-default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-
-def cmaps_default_colors(base_color = "white", colors = True):
-    if not isinstance(colors, np.ndarray):
-        colors = default_colors
-    return(
-        [mpl.colors.LinearSegmentedColormap.from_list("", [base_color, color]) for color in default_colors]
-    )
-
-
 def next_color(ax):
     return(
         ax.plot([])[0].get_color()
