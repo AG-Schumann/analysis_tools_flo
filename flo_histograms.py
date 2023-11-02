@@ -42,7 +42,7 @@ def nice_log_label(ax, axis = "y", loglim = 3):
         if l == 0:
             return("0")
         else:
-            return(f"{l} x $10^{{{exp}}}$")
+            return(f"${l} \\times 10^{{{exp}}}$")
 
     if axis == "b":
         nice_log_label(ax = ax, axis = "x", loglim = loglim)

@@ -1,21 +1,23 @@
 import numpy as np
-
-p0 = np.array(
-    [1.15, 561, 586, 13.3, 399]
-)
-sp0 = np.array(
-    [0.15, 119, 47, 0.4, 0.4, 7]
-)
-
-fit_labels = [f"\\Theta_{i}" for i in range(5)]
-fit_labels_asci = [f"Θ{i}" for i in range(5)]
-
-fit_units = ["1/(µm e)", "kV/cm", "kV/cm", "PE/(kV/cm µm)", "kV/cm"]
-fit_description = ["charge gain factor", "slope in charge gain", "threshold of charge mult.", "S2 gain factor", "threshold of S2"]
-
-len_desc = max([len(x) for x in fit_description])
+import pandas as pd
 
 
+
+
+fit_pars = pd.DataFrame({
+    "label": [f"Θ{i}" for i in range(5)],
+    "label_tex": [f"\\Theta_{i}" for i in range(5)],
+    "unit": ["1/(µm e)", "kV/cm", "kV/cm", "PE/(kV/cm µm)", "kV/cm"],
+    "desc": ["charge gain factor", "slope in charge gain", "threshold of charge mult.", "S2 gain factor", "threshold of S2"],
+    "fit":  [0.8, 242, 725, 16.6, 412],
+    "sfit": [.1, 45, 48, 1.1, 412],
+})
+
+fit_10 = np.array([1.15, 561, 586, 13.3, 399])
+sfit_10 = np.array([0.15, 119, 47, 0.4, 7])
+
+
+len_desc = max([len(x) for x in fit_pars["desc"].values])
 
 
 pars_calc_g = dict(
@@ -42,6 +44,9 @@ def calc_N_e__g_conversion(
         E/W,
         W/(E * f_ion * e_LC * e_Q * f_LXE * e_dy)
     )
+
+
+N_e, g = calc_N_e__g_conversion()
 
 
 def E_r_calc(r, V_A, d_w, V_surface_1kV = 243.6):
@@ -76,7 +81,6 @@ def dNg_calc(Ne, E, dr, p3, p4):
 
 
 
-N_e, g = calc_N_e__g_conversion()
 
 
 # The actual simulation
@@ -163,15 +167,15 @@ def PE_factory(Ne0 = 1, dr = .05, d_w = 10, r_max = False):
     '''
     
     def f(dVs, p0, p1, p2, p3, p4):
-        return([
-            elena.calc_one_voltage(
+        return(np.array([
+            calc_one_voltage(
                 # paramters to fit
                 dV, p0, p1, p2, p3, p4, 
                 # constant parameters
                 Ne0 = Ne0, dr = dr, d_w = 10, r_max = r_max,
             )["PE"]
             for dV in dVs
-        ])
+        ]))
 
     return(f)
 
@@ -190,14 +194,14 @@ def PE_factory_constant_Ne(Ne0 = 1, dr = .05, d_w = 10, r_max = False):
     '''
     
     def f(dVs, p3, p4):
-        return([
-            elena.calc_one_voltage(
+        return(np.array([
+            calc_one_voltage(
                 # paramters to fit
                 dV, p3 = p3, p4 = p4, 
                 p0 = 0, p1 = 1, p2 = 1,
                 Ne0 = Ne0, dr = dr, d_w = 10, r_max = r_max
             )["PE"]
             for dV in dVs
-        ])
+        ]))
     
     return(f)
