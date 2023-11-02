@@ -49,6 +49,10 @@ def calc_N_e__g_conversion(
 N_e, g = calc_N_e__g_conversion()
 
 
+pars_calc_g__flo = dict(E = 42e3, W = 13.3, e_LC = .14)
+N_e__flo, g__flo = calc_N_e__g_conversion(**pars_calc_g__flo)
+
+
 def E_r_calc(r, V_A, d_w, V_surface_1kV = 243.6):
     # 2 pi is already in E_lookup
     E = V_surface_1kV*V_A*(d_w/2) / r * (r>=(d_w/2))
