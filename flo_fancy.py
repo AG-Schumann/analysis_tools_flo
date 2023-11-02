@@ -36,13 +36,15 @@ def linspace_over(x, N):
 
 
 
-def lin_or_logspace(x, N = 1000, show_ratio = False, linlog_thr = 1):
+def lin_or_logspace(x, N = 1000, show_ratio = False, linlog_thr = 1, return_str = False):
     '''
     checks if data is distributed log or lin
     
     set force to "lin" or "log" to force that
     
     '''
+    is_lin = True
+    
     
     if (min(x) > 0):
         x_ = np.sort(x)
@@ -53,11 +55,24 @@ def lin_or_logspace(x, N = 1000, show_ratio = False, linlog_thr = 1):
         if show_ratio is True:
             print(linlog)
         if (linlog >= linlog_thr):
-            return(logspace_over(x, N))
+            is_lin = False
+            
     elif show_ratio is True:
         print("negative numbers found, using linscale")
+        is_lin  = True
     # fallback to linspace
-    return(linspace_over(x, N))
+    
+    
+    if return_str is True:
+        if is_lin is True:
+            return("lin")
+        else:
+            return("log")
+    else:
+        if is_lin is True:
+            return(linspace_over(x, N))
+        else:
+            return(logspace_over(x, N))
     
 
 
