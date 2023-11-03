@@ -41,16 +41,17 @@ def calc_N_e__g_conversion(
     e_dy = pars_calc_g["e_dy"],
 ):
     return(
-        E/W,
         W/(E * f_ion * e_LC * e_Q * f_LXE * e_dy)
     )
 
 
-N_e, g = calc_N_e__g_conversion()
+N_e = 14000 # from paper, sec 2.2
+g = calc_N_e__g_conversion()
 
 
 pars_calc_g__flo = dict(E = 42e3, W = 13.3, e_LC = .14)
-N_e__flo, g__flo = calc_N_e__g_conversion(**pars_calc_g__flo)
+N_e__flo = 1000
+g__flo = calc_N_e__g_conversion(**pars_calc_g__flo)
 
 
 def E_r_calc(r, V_A, d_w, V_surface_1kV = 243.6):
