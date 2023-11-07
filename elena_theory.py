@@ -65,18 +65,19 @@ def calc_r_max(V_A, d_w = 10, V_surface_1kV = 243.6, treshold = 300):
     )
 
 
+
+# The iterative functions are here
 def dNe_calc(Ne, E, dr, p0, p1, p2):
     # added the (E >= p2) as there is no amplification if E < p2
     if (E > p2):
         exp = np.exp(-p1/(E-p2))
     else:
         return(0)
-    
-
     dNe = Ne * p0 * exp * dr
     dNe * (dNe > 0)
     return(dNe)
-                           
+
+
 def dNg_calc(Ne, E, dr, p3, p4):
     if E > p4:
         dNg = Ne * p3 * (E - p4) * dr
