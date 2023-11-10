@@ -323,3 +323,54 @@ def fit_df(
     
     return(fit_result, (sg1, sg2))
 
+
+
+def fit_df_lin(df, ax = False):
+#     x, y, sx, sy = ss.S1oE, ss.S2oE, ss.sS1oE, ss.sS2oE
+    x, y, sx, sy = df.x, df.y, df.sx, df.sy
+    
+    fit_dict = ff.fit(
+        ff.poly_1,
+        x, y,
+        sigma = sy,
+        sx = sx,
+        ODR = True,
+        ax = ax,
+        show_fit_uncertainty=True,
+        return_as_dict=True,
+        xp = np.linspace(0, .17, 100),
+        show_fit_result=False,
+        label = "",
+        color = "black"
+    )
+    fit = fit_dict["fit"]
+    s_fit = np.diag(fit_dict["cov"])**.5
+    m, c = fit
+    s_m, s_c = s_fit
+    cov_cm = fit_dict["cov"][0,1]
+    
+    g1 = (-c/m)
+    s_g1 = (
+          (s_c/m)**2
+        + (c/m**2 * s_m)**2
+        + (-c/m**3*cov_cm)
+        
+    )**.5
+    
+    g2 = c
+    s_g2 = s_c
+    
+    str_g1 = f"$g_1: ({g1:.3f} \\pm {s_g1:.3f})$ PE/γ"
+    str_g2 = f"$g_2: ({g2:.3f} \\pm {s_g2:.3f}) PE/e$"
+    fhist.addlabel(ax, str_g1)
+    fhist.addlabel(ax, str_g2)
+
+    fit_dict["results"] = {
+        "g1": g1,
+        "s_g1": s_g1,
+        "g2": g2,
+        "s_g2": s_g2,
+    }
+    
+    return(fit_dict)
+    
