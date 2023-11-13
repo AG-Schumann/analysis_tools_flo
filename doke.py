@@ -362,9 +362,14 @@ def fit_df_lin(df, ax = False):
     
     str_g1 = f"$g_1: ({g1:.3f} \\pm {s_g1:.3f})$ PE/γ"
     str_g2 = f"$g_2: ({g2:.3f} \\pm {s_g2:.3f}) PE/e$"
-    fhist.addlabel(ax, str_g1)
-    fhist.addlabel(ax, str_g2)
-
+    
+    if isinstance(ax, plt.Axes):
+        ax.set_xlim(0)
+        ax.set_ylim(0)
+        fhist.addlabel(ax, str_g1)
+        fhist.addlabel(ax, str_g2)
+    
+    
     fit_dict["results"] = {
         "g1": g1,
         "s_g1": s_g1,
