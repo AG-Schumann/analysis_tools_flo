@@ -3,18 +3,35 @@ import pandas as pd
 
 
 
+fit_10 = np.array([1.15, 561, 586, 13.3, 399])
+sfit_10 = np.array([0.15, 119, 47, 0.4, 7])
+
+fit_10_el = fit_10 * 1
+sfit_10_el = sfit_10 * 1
+fit_10_el[3] = 1.68e-2
+sfit_10_el[3] = 0.51e-2
+
+
+
+
+fit_5_10 = np.array([0.8, 242, 725, 16.6, 412])
+sfit_5_10 = np.array([.1, 45, 48, 1.1, 10])
+
+
+
 
 fit_pars = pd.DataFrame({
     "label": [f"Θ{i}" for i in range(5)],
     "label_tex": [f"\\Theta_{i}" for i in range(5)],
     "unit": ["1/(µm e)", "kV/cm", "kV/cm", "PE/(kV/cm µm)", "kV/cm"],
     "desc": ["charge gain factor", "slope in charge gain", "threshold of charge mult.", "S2 gain factor", "threshold of S2"],
-    "fit":  [0.8, 242, 725, 16.6, 412],
-    "sfit": [.1, 45, 48, 1.1, 412],
+    "fit":  fit_10,
+    "sfit": sfit_10,
+    "fit_el_gain": fit_10_el,
+    "sfit_el_gain": sfit_10_el,
+    
 })
 
-fit_10 = np.array([1.15, 561, 586, 13.3, 399])
-sfit_10 = np.array([0.15, 119, 47, 0.4, 7])
 
 
 len_desc = max([len(x) for x in fit_pars["desc"].values])
@@ -211,3 +228,38 @@ def PE_factory_constant_Ne(Ne0 = 1, dr = .05, d_w = 10, r_max = False):
         ]))
     
     return(f)
+    
+    
+    
+    
+def calc_shadowing_correction_factor(V_A, N_steps = 10000, d_w=10, V_surface_1kV=243.6, treshold=400, return_all = False):
+    '''
+    Gives the mean shadowing correction factor for anode voltages.
+    '''
+    if isinstance(V_A, (np.ndarray, list, tuple)):
+        return(
+            np.array([
+                calc_shadowing_correction_factor(V_Ai, N_steps = 10000, d_w=10, V_surface_1kV=243.6, treshold=400, return_all = return_all)
+                for V_Ai in V_A
+            ])
+        )
+    
+    r_max = calc_r_max(V_A=V_A, d_w=d_w, V_surface_1kV=V_surface_1kV, treshold=treshold)
+    r_range = np.linspace(r_max, d_w/2, N_steps)
+
+    shaddowing = 1/(1-(np.arcsin(d_w/2/r_range)/np.pi))
+    mean_shadowing = np.mean(shaddowing)
+    if return_all is True:
+        return({
+            "mean_factor": mean_shadowing,
+            "all_factors": shaddowing,
+            "r_range": r_range,
+            "r_max": r_max,
+            "V_A": V_A,
+            "N_steps": N_steps,
+            "d_w": d_w,
+            "V_surface_1kV": V_surface_1kV,
+            "treshold": treshold,
+        })
+    
+    return(mean_shadowing)

@@ -364,6 +364,7 @@ def median_gauss(
     f = ff.gauss,
     ax = False,
     bining_width_in_mads = 4,
+    show_fit_result = True,
     show_p0 = False,
     show_bw = False,
     show_f = False,
@@ -501,9 +502,10 @@ parameters:
             else:
                 label_f = ""
             ax.plot(xf, yf, label = label_f, color = color)
-            for i_par, par, val, sval in enumezip(f, fit, sfit):
-                if i_par > 0:
-                    add_fit_parameter(ax, par, val, sval)
+            if show_fit_result is True:
+                for i_par, par, val, sval in enumezip(f, fit, sfit):
+                    if i_par > 0:
+                        add_fit_parameter(ax, par, val, sval)
             ax.legend(loc = "upper right")
             ax.set_ylabel("counts")
         
