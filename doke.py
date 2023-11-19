@@ -245,7 +245,7 @@ def g1g2_uncertainty_from_doke_fit(
         
         
         if "g1" not in fixed_values:
-            str_g1 = f"$g_1: \\left({g1:.2f}^{{+{sg1r:.2f}}}_{{-{sg1l:.2f}}}\\right)\, \\mathrm{{PE/γ}}$"
+            str_g1 = f"$g_1: \\left({g1:.3f}^{{+{sg1r:.3f}}}_{{-{sg1l:.3f}}}\\right)\, \\mathrm{{PE/γ}}$"
             
         if "g2" not in fixed_values:
             str_g2 = f"$g_2: {flo_fancy.tex_value(g2, sg2, 'PE/e', digits = 3, lim = (-3,0))}$"
@@ -266,12 +266,12 @@ def g1g2_uncertainty_from_doke_fit(
             style_2["capsize"] = 0
         
         if show_value_unc is True:
-            fhist.errorbar(ax, g1, 0, sy = False, sx = [[sg1l], [sg1r]], plot = True, marker = "x", **style_1)
-            fhist.errorbar(ax, 0, g2, sg2, plot = True, marker = "*", **style_2)
+            fhist.errorbar(ax, g1, 0, sy = False, sx = [[sg1l], [sg1r]], plot = True, **style_1)
+            fhist.errorbar(ax, 0, g2, sg2, plot = True, **style_2)
         
         
-        flo_fancy.addlabel(ax, str_g1, color = color_g1, marker = "x")
-        flo_fancy.addlabel(ax, str_g2, color = color_g2, marker = "*")
+        flo_fancy.addlabel(ax, str_g1, color = color_g1)
+        flo_fancy.addlabel(ax, str_g2, color = color_g2)
         
         ax.set_xlim(0)
         ax.set_ylim(0)
@@ -329,8 +329,10 @@ def fit_df_lin(df, ax = False):
 #     x, y, sx, sy = ss.S1oE, ss.S2oE, ss.sS1oE, ss.sS2oE
     x, y, sx, sy = df.x, df.y, df.sx, df.sy
     
+    f_fit = ff.poly_1
+    
     fit_dict = ff.fit(
-        ff.poly_1,
+        f_fit,
         x, y,
         sigma = sy,
         sx = sx,
@@ -344,7 +346,9 @@ def fit_df_lin(df, ax = False):
         color = "black"
     )
     fit = fit_dict["fit"]
-    s_fit = np.diag(fit_dict["cov"])**.5
+    cov = fit_dict["cov"]
+    
+    s_fit = np.diag(cov)**.5
     m, c = fit
     s_m, s_c = s_fit
     cov_cm = fit_dict["cov"][0,1]
@@ -360,7 +364,23 @@ def fit_df_lin(df, ax = False):
     g2 = c
     s_g2 = s_c
     
-    str_g1 = f"$g_1: ({g1:.3f} \\pm {s_g1:.3f})$ PE/γ"
+    
+    # calculate from right to left, such y-values are rising and np.interp works....
+    xp = np.linspace(1, 0, 10_000)
+    yf = f_fit(xp, *fit)
+    syf = f_fit.sf(xp, *fit, cov = cov)
+
+    sy_l = yf-syf
+    sy_r = yf+syf
+
+    g1 =np.interp(0, yf, xp)
+    g1_l = np.interp(0, sy_l, xp)
+    g1_r = np.interp(0, sy_r, xp)
+    s_g1_l = g1 - g1_l
+    s_g1_r = g1_r - g1
+
+    
+    str_g1 = f"$g_1: ({g1:.3f}^{{+{s_g1_r:.3f}}}_{{-{s_g1_l:.3f}}})$ PE/γ"
     str_g2 = f"$g_2: ({g2:.3f} \\pm {s_g2:.3f}) PE/e$"
     
     if isinstance(ax, plt.Axes):
@@ -375,6 +395,8 @@ def fit_df_lin(df, ax = False):
         "s_g1": s_g1,
         "g2": g2,
         "s_g2": s_g2,
+        "s_g1_l": s_g1_l,
+        "s_g1_r": s_g1_r,
     }
     
     return(fit_dict)

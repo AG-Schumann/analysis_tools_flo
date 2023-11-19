@@ -843,8 +843,7 @@ def draw_counts(
     
     if (s_counts is False):
         s_counts = s_pois(counts)
-    else:
-        s_counts = 0
+    
     
     
     if len(bc) == (len(counts)+1):
