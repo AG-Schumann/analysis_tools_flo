@@ -214,12 +214,12 @@ def g1g2_uncertainty_from_doke_fit(
         return((0, 0), 0)
     
     
-    xp = np.logspace(-2,6, 10_000)
+    xp = np.linspace(1, 0, 10_000)
     yp = f(xp, *fit)
     sp = f.sf(xp, *fit, cov = cov)
 
-    xl = np.interp(0, -(yp - sp), xp, right = np.inf, left=np.inf)
-    xr = np.interp(0, -(yp + sp), xp, right = np.inf, left=np.inf)
+    xl = np.interp(0, (yp - sp), xp)
+    xr = np.interp(0, (yp + sp), xp)
     xp = np.linspace(0, xr, 10_000)
 
     yp = f(xp, *fit)
