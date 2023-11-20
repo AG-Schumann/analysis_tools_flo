@@ -297,7 +297,7 @@ def calc_el_gain_band(dVs, Ne0 = 1, dr = .05, d_w = 10, r_max = False):
     def f(dVs, parset):
         return(
             np.array([
-                elena.calc_one_voltage(
+                calc_one_voltage(
                     # paramters to fit
                     dV,
                     # constant parameters

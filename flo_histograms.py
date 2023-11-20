@@ -355,6 +355,19 @@ def errorbar(
     return(color)
 
 
+def errorband(
+    ax,
+    x, y, sy,
+    color = "black",
+    alpha = .1,
+    alpha_line = 1,
+    **kwargs
+):
+    
+    ax.plot(x, y, color = color, alpha = alpha_line, **kwargs)
+    ax.fill_between(x, y-sy, y+sy, color = color, alpha = alpha)
+    
+    return()
 
 
 
