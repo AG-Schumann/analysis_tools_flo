@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import flo_histograms as fhist
 
 
 
@@ -172,6 +174,11 @@ def calc_one_voltage(dV, p0, p1, p2, p3, p4, Ne0 = 1, dr = .05, d_w = 10, V_surf
         "N_g_sim": Ng_sim,
         "dN_e_sim": dNe_sim,
         "dN_g_sim": dNg_sim,
+        "Ne0": Ne0,
+        "dr": dr,
+        "d_w": d_w,
+        "V_surface_1kV": V_surface_1kV,
+        "treshold": treshold,
     })
 
 
@@ -313,3 +320,77 @@ def calc_el_gain_band(dVs, Ne0 = 1, dr = .05, d_w = 10, V_surface_1kV = 243.6, r
     s_values = f(dVs, s_pars)
 
     return(values, s_values)
+
+
+
+def calc_shadow_of_dV(dV, ax = False, fo = False, show = True, ext = "pdf", verbose = False, pars = False):
+    if isinstance(ax, plt.Axes):
+        verbose = True
+    
+    
+    if pars is False:
+        pars = fit_10
+    
+    if verbose is True: print(f"simulationg {dV} kV")
+    calcs = calc_one_voltage(dV, *pars)
+
+    r_sim = calcs["r_sim"]
+    el_sim = calcs["dN_g_sim"]
+    d_w = calcs["d_w"]
+    dr = calcs["dr"] 
+
+    if verbose is True: print("  calculating")
+    el_p = el_sim
+    gc = 1-(np.arcsin(d_w/2/r_sim)/np.pi)
+    # fixing nan errors
+    ids_nan = np.nonzero(np.isnan(gc))[0]
+    gc[ids_nan] = gc[ids_nan-1]
+    
+    el_sh = el_p / gc
+    
+    sum_prod = np.sum(el_p)
+    sum_seen = np.sum(el_sh)
+    ocf = sum_seen / sum_prod
+
+
+    
+    
+    
+    if isinstance(ax, plt.Axes):
+        ax_gc = ax
+        print("  plotting")
+        ax.set_xlabel("Distance to wire diameter")
+        ax.set_ylabel("Geometric non-coverage")
+        ax = ax_gc.twinx()
+
+        fhist.addlabel(ax, f"$\\Delta V_\\mathrm{{ag}}$: {dV} kV")
+        col_el = fhist.default_colors[0]
+        col_gc = fhist.default_colors[2]
+        col_ss = fhist.default_colors[1]
+
+
+        ax.plot(r_sim, el_p, label = f"new signal per step ($\\Sigma$: {sum_prod/1e3:.1f} kPE)")
+        ax.plot(r_sim, el_sh, label = f"new signal per step (seen, $\\Sigma$: {sum_seen/1e3:.1f} kPE)")
+
+
+        ax.plot([], color = col_gc, label = "geometric non-coverage")
+        ax_gc.plot(r_sim, gc, color = col_gc)
+
+
+        fhist.addlabel(ax, f"overall correction factor {ocf:.3f}")
+        ax_gc.invert_xaxis()
+        ax.set_ylabel("$\Delta$EL [ph/el]")
+        ax.legend(loc = (.1, .4))
+
+        plt.subplots_adjust(right = .8)
+        if isinstance(fo, str):
+            print("  saving")
+            plt.savefig(f"{fo}/shadowing_{dV}_kV.{ext}")
+            
+        if show is True:
+            plt.show()
+        else:
+            plt.close()
+                
+    return(ocf)
+
