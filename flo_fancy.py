@@ -104,6 +104,49 @@ def flatten_dict(d, sep = "__", path = "", *args, **kwargs):
 def addlabel(ax, label, color = "black", linestyle = "", marker = "", *args, **kwargs):
     ax.plot([], [], label = label, color = color, linestyle=linestyle, marker=marker, *args, **kwargs)
 
+def addtext(
+    ax, x, y,
+    text, color = "black",
+    verticalalignment="center_baseline", horizontalalignment="center",
+    rotation=0, rotation_mode="anchor",
+    transform_rotates_text=False,
+    **kwargs
+    ):
+    '''
+    adds a text to a plot
+
+    ax:
+        plt.axes element
+    x, y:
+        coordinates of the text
+    text:
+        the text to be put into the plot
+    color:
+        the color of the text (black)
+    verticalalignment:
+        options: top, (center_baseline), center, baseline, bottom
+    horizontalalignment:
+        options: left, (center), right
+    (see https://matplotlib.org/stable/gallery/text_labels_and_annotations/text_alignment.html)
+    rotation:
+        how many degrees to rotate the text (0)
+    rotation_mode:
+        how to rotate the text ("anchor")
+    transform_rotates_text:
+        use screen (False) or plot angle (relevant if text should follow a line but the plot is not 1:1)
+        (only available in matplotlib 3.8, we have 3.0..... argh.......)
+    **kwargs:
+        everything else that can be adjusted about ax.text
+    '''
+    
+    ax.text(
+        x, y,
+        text, color = color,
+        verticalalignment = verticalalignment, horizontalalignment = horizontalalignment,
+        rotation = rotation, rotation_mode = rotation_mode,
+        # transform_rotates_text = transform_rotates_text,
+        **kwargs
+    )
 
 
 def add_fit_parameter(ax, l, p, sp=None, unit="", unit_tex="", fmt="auto"):

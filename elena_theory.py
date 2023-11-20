@@ -139,7 +139,7 @@ def calc_one_voltage(dV, p0, p1, p2, p3, p4, Ne0 = 1, dr = .05, d_w = 10, V_surf
     r_sim = np.arange(r_max, d_w/2, -dr)
 
     
-    E_sim = E_r_calc(r_sim, dV, d_w)
+    E_sim = E_r_calc(r_sim, dV, d_w, V_surface_1kV = V_surface_1kV)
     
     Ne_sim = np.zeros(len(E_sim))
     Ng_sim = np.zeros(len(E_sim))
@@ -267,7 +267,7 @@ def calc_shadowing_correction_factor(V_A, N_steps = 10000, d_w=10, V_surface_1kV
 
 
 
-def calc_el_gain_band(dVs, Ne0 = 1, dr = .05, d_w = 10, r_max = False):
+def calc_el_gain_band(dVs, Ne0 = 1, dr = .05, d_w = 10, V_surface_1kV = 243.6, r_max = False):
     '''
     calculates for a given list of V_anode:
         the el-gain and the band of uncertaintie of elenas fit paramters
@@ -301,7 +301,7 @@ def calc_el_gain_band(dVs, Ne0 = 1, dr = .05, d_w = 10, r_max = False):
                     # paramters to fit
                     dV,
                     # constant parameters
-                    Ne0 = Ne0, dr = dr, d_w = d_w, r_max = False,
+                    Ne0 = Ne0, dr = dr, d_w = d_w, V_surface_1kV = V_surface_1kV, r_max = False,
                     # the parameters
                     **parset
                 )["PE"]
