@@ -263,3 +263,53 @@ def calc_shadowing_correction_factor(V_A, N_steps = 10000, d_w=10, V_surface_1kV
         })
     
     return(mean_shadowing)
+
+
+
+
+def calc_el_gain_band(dVs, Ne0 = 1, dr = .05, d_w = 10, r_max = False):
+    '''
+    calculates for a given list of V_anode:
+        the el-gain and the band of uncertaintie of elenas fit paramters
+        ignores the thresholds as increase the bands as they correlate with the gains
+          but we have no covariance matrix
+    '''
+    
+    pars = fit_pars["fit_el_gain"].values*1
+    s_pars = fit_pars["sfit_el_gain"].values*1
+    
+    parset = dict(
+        p0 = pars[0],
+        p1 = pars[1],
+        p2 = pars[2],
+        p3 = pars[3],
+        p4 = pars[4],
+    )
+    s_pars = dict(
+        p0 = s_pars[0],
+        p1 = s_pars[1],
+        p2 = pars[2],
+        p3 = s_pars[3],
+        p4 = pars[4],
+    )
+    
+    
+    def f(dVs, parset):
+        return(
+            np.array([
+                elena.calc_one_voltage(
+                    # paramters to fit
+                    dV,
+                    # constant parameters
+                    Ne0 = Ne0, dr = dr, d_w = d_w, r_max = False,
+                    # the parameters
+                    **parset
+                )["PE"]
+                for dV in dVs
+            ])
+        )
+        
+    values = f(dVs, parset)
+    s_values = f(dVs, s_pars)
+
+    return(values, s_values)
