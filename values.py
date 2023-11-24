@@ -113,18 +113,28 @@ class value():
         str_pow_10 = ""
         str_unit = ""
         pow_10 = 0
-        ex = int(np.log10(self.s_v))
-        if (ex <= -2) or (ex > 3):
-            pow_10 = -ex
-            str_pow_10 = f" × 10^{ex}"
-            format = ".1f"
-
-        if bool(self.units) is True or str_pow != "":
-            b_l = "("
-            b_r = ")"
-            str_unit = f" {self.units}"
+        str_unit = f" {self.units}"
+        if self.s_v != 0:
+            ex = int(np.log10(self.s_v))
+            if (ex <= -2) or (ex > 3):
+                pow_10 = -ex
+                str_pow_10 = f" × 10^{ex}"
+                format = ".1f"
+            str_err = f" ± {self.s_v*10**pow_10:{format}}"
+            if str_unit != "" or str_pow != "":
+                b_l = "("
+                b_r = ")"
             
-        return(f"{b_l}{self.v*10**pow_10:{format}} ± {self.s_v*10**pow_10:{format}}{b_r}{str_pow_10}{str_unit}")
+        else:
+            str_err = ""
+            ex = int(np.log10(self.v))
+            if (ex <= -2) or (ex > 3):
+                pow_10 = -ex
+                str_pow_10 = f" × 10^{ex}"
+                format = ".1f"
+            
+            
+        return(f"{b_l}{self.v*10**pow_10:{format}}{str_err}{b_r}{str_pow_10}{str_unit}")
     
     # calculations
     def __add__(self, target):
