@@ -289,7 +289,7 @@ def fit_df(
     sg_via_width = True,
     show_fit_result = False,
     color = "black",
-    
+    return_as_dict = False,
     verbose = False,
     
 ):
@@ -319,13 +319,22 @@ def fit_df(
 
     sg1, sg2 = g1g2_uncertainty_from_doke_fit(fit, cov, ax = ax, fixed_values = fixed_values, color = color, verbose = verbose)
     
+    if return_as_dict is True:
+        return({
+            "g1": fit[0],
+            "s_g1": sfit[0],
+            "g2": fit[1],
+            "s_g2": sfit[1],
+            "s_g1_l": sg1[0],
+            "s_g1_r": sg1[1],
+        })
     
     
     return(fit_result, (sg1, sg2))
 
 
 
-def fit_df_lin(df, ax = False):
+def fit_df_lin(df, ax = False, return_as_dict = False):
 #     x, y, sx, sy = ss.S1oE, ss.S2oE, ss.sS1oE, ss.sS2oE
     x, y, sx, sy = df.x, df.y, df.sx, df.sy
     
@@ -389,8 +398,7 @@ def fit_df_lin(df, ax = False):
         fhist.addlabel(ax, str_g1)
         fhist.addlabel(ax, str_g2)
     
-    
-    fit_dict["results"] = {
+    fit_results = {
         "g1": g1,
         "s_g1": s_g1,
         "g2": g2,
@@ -398,6 +406,9 @@ def fit_df_lin(df, ax = False):
         "s_g1_l": s_g1_l,
         "s_g1_r": s_g1_r,
     }
+    fit_dict["results"] = fit_results
+    if return_as_dict is True:
+        return(fit_results)
     
     return(fit_dict)
     
