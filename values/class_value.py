@@ -1,8 +1,7 @@
 import numpy as np
 from values.class_unit import unit
 import values.objects_operations as operation
-
-
+import values.functions_helper as functions_helper
 
 
 
@@ -34,14 +33,18 @@ class value():
         
         if isinstance(units, unit):
             self.units = units
-        elif isinstance(units, dict):
+        elif isinstance(units, (dict, str)):
             self.units = unit(units)
-        elif isinstance(units, str):
-            self.units = unit({units: 1})
         else:
             self.units = unit(dict())
         
-
+    
+    # modifications
+    def set_cov(self, target, cov):
+        functions_helper.set_cov(self, target, cov)
+    def set_unit(self, new_unit):
+        self.units = unit(new_unit)
+    
     # optics
     def __str__(self, format = ""):
         return(self.__format__(format = format))
