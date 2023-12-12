@@ -649,9 +649,28 @@ def f_p0_erf(x, y):
     return(p0)
 
 
+def f_s_erf(x, mu, sigma, y0, y1, cov):
+    if isinstance(x, (np.ndarray, list, tuple)):
+        return([f_s_erf(xi, mu, sigma, y0, y1, cov) for xi in x])
+
+    erf = scipy.special.erf((x-mu)/sigma/(2**.5))
+    gauss = (2/np.pi)**.5 * np.exp((x-mu)**2/(2 * sigma**2))
+    
+    derivs = np.matrix([
+        (y1-y0)/2 * gauss / sigma**2, # dfdmu
+        (y1-y0) / 2 * (mu-x) * gauss / sigma**2, #dfdsigma
+        1 - (erf + 1)/2, # dfdy0
+        (erf + 1)/2, #dfdy1
+    ])
+    sf = derivs * cov * derivs.T
+    return(np.array(sf)[0][0])
+    
+
+
 erf = fit_function(
     f = f_erf,
     f_p0 = f_p0_erf,
+    sf = f_s_erf,
     description = "error function",
     parameters = ["mu", "sigma", "y0", "y1"],
     parameters_tex = ["\\mu", "\\sigma", "y_{{0}}", "y_{{1}}"],
