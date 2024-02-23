@@ -2,7 +2,24 @@ import numpy as np
 import pandas as pd
 
 
+def get_dict_from_str(str_, delim1 = "; ",delim2 = "=", prefix = ""):
+    return(
+        {f"{prefix}{k}":v for k, v in [x.split(delim2) for x in str_.split(delim1)]}
+    )
+    
 
+def _clean_one_name(name):
+    name = name.split(" ")[0]
+    if "." in name:
+        name = name.split(".")[1]
+    return(name)
+
+def _clean_names(df):
+    names = {n:_clean_one_name(n) for n in df.columns}
+    df = df.rename(columns = names)
+    return(df)
+    
+    
 
 def read_csv(path, unpack_settings = True, explicit_settings = True, clean_names = True):
     '''
@@ -27,23 +44,6 @@ def read_csv(path, unpack_settings = True, explicit_settings = True, clean_names
         
     '''
     
-    def get_dict_from_str(str_, delim1 = "; ",delim2 = "=", prefix = ""):
-        return(
-            {f"{prefix}{k}":v for k, v in [x.split(delim2) for x in str_.split(delim1)]}
-        )
-        
-    
-    def _clean_one_name(name):
-        name = name.split(" ")[0]
-        if "." in name:
-            name = name.split(".")[1]
-        return(name)
-
-    def _clean_names(df):
-        names = {n:_clean_one_name(n) for n in df.columns}
-        df = df.rename(columns = names)
-        return(df)
-        
     
     
     with open(path, "r") as f:
@@ -86,14 +86,17 @@ def read_csv(path, unpack_settings = True, explicit_settings = True, clean_names
 
         df_s["setting"] = set_name
         df2 = pd.concat((df2, df_s), sort=False)
+    
     if clean_names is True:
         df2 = _clean_names(df2)
+    
+    if explicit_settings is True:
+        sdf = pd.DataFrame([get_dict_from_str(setting_, prefix = "setting_") for setting_ in df2.setting])
         
-    df2 = pd.merge(
-        df2,
-        pd.DataFrame([get_dict_from_str(setting, prefix = "setting_") for setting in df2.setting]),
-        left_index = True,
-        right_index=True
-    )
+        # merging does not work! all values are the same, wtf....
+        for c in sdf.columns:
+            print(c)
+            df2[c] = sdf[c].values
+    
     
     return(df2)
