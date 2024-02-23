@@ -60,7 +60,7 @@ def gc_get_xydata(ds, what, bins):
                         "bc": bc,
                         "mu": mu,
                         "smu": smu,
-                        "spr":spr,            
+                        "spr":spr,
                     }, ignore_index = True)
                 except Exception:
                     pass

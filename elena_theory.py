@@ -109,7 +109,7 @@ def dNg_calc(Ne, E, dr, p3, p4):
 
 
 # The actual simulation
-def calc_one_voltage(dV, p0, p1, p2, p3, p4, Ne0 = 1, dr = .05, d_w = 10, V_surface_1kV = 243.6, r_max = False, treshold = 300):
+def calc_one_voltage(dV, p0, p1, p2, p3, p4, Ne0 = 1, dr = .05, d_w = 10, V_surface_1kV = 243.6, r_max = False, treshold = 300, r_sim  = False):
     '''
     calculates everything for one voltage
     use return_value["PE"] to get _PE
@@ -138,7 +138,9 @@ def calc_one_voltage(dV, p0, p1, p2, p3, p4, Ne0 = 1, dr = .05, d_w = 10, V_surf
     if r_max is False:
         r_max = calc_r_max(dV, d_w = 10, V_surface_1kV= V_surface_1kV, treshold = treshold)
         r_max = np.round(r_max/dr)*dr
-    r_sim = np.arange(r_max, d_w/2, -dr)
+        
+    if r_sim is False:
+        r_sim = np.arange(r_max, d_w/2, -dr)
 
     
     E_sim = E_r_calc(r_sim, dV, d_w, V_surface_1kV = V_surface_1kV)

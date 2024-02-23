@@ -22,6 +22,18 @@ def inv_small(x, ref = 1):
     return(x_)
 
 
+def df_uniqe(df, field, return_field = False):
+    field_uniques = np.unique(df[field])
+    for unique in field_uniques:
+        if return_field is True:
+            yield(unique, df.query(f"{field} == @unique"))
+        else:
+            yield(df.query(f"{field} == @unique"))
+
+
+
+
+
 def logspace_over(x, N):
     x_,*_ = clean(x)
     x_ = x_[x_ > 0]

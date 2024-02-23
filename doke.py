@@ -23,11 +23,12 @@ def get_df_from_ds(
     doke_df = False,
     axs = False,
     title = "",
+    custom_dict = None,
     verbose = False,
     
 ):
     if Energys is True:
-        Energys = [9.4053, 32.1516, 41.5569] # keV
+        Energys = [9.4, 32.1, 41.5] # keV
     if field_ids is True:
         field_ids = [(1,3), (0,2)]#, (6,7)]
     if axs is False:
@@ -35,7 +36,12 @@ def get_df_from_ds(
     elif axs is True:
         fig, axs = fhist.make_fig(min(len(Energys), len(field_ids)), 2, rax = False)
         fig.suptitle(title)
-        
+    
+    if not isinstance(custom_dict, dict):
+        if verbose is True:
+            print("crating ne output dataframe")
+        custom_dict = dict()
+    
     if verbose is True:
         print(f"Energys: {Energys}")
         print(f"field_ids: {field_ids}")
@@ -52,7 +58,7 @@ def get_df_from_ds(
         
         _, s1, s2 = flo_fancy.remove_zero((s1 > 0) & (s2 > 0), s1, s2)
         
-        ax1 = ax2 = False
+        ax1 = ax2 = None
         if axs is not False:
             if verbose is True:
                 print(f"plotting {E}")
@@ -70,14 +76,15 @@ def get_df_from_ds(
                 ax2.set_xlabel(f"corrected S2 area / PE")
                 
             except Exception as e:
-                    ax1 = ax2 = False
+                    ax1 = ax2 = None
                     if verbose is True:
                         print(e)
             
         S1, spr_S1, sS1 = fhist.median_gauss(s1, strict_positive=True, ax = ax1)
         S2, spr_S2, sS2 = fhist.median_gauss(s2, strict_positive=True, ax = ax2)
 
-
+        
+            
         out = {
             "S1": S1,
             "S2": S2,
@@ -85,12 +92,17 @@ def get_df_from_ds(
             "sS2": sS2,
             "E": E,
             "label": f"{label_prefix}{E:.1f} keV{label_suffix}",
+            **custom_dict,
         }
         for s_, l in [("S1","x"), ("S2", "y"), ("sS1", "sx"), ("sS2", "sy")]:
             soe = out[f"{s_}"] / E
             out[f"{s_}oE"] = soe
             out[f"{l}"] = soe / 1000*W
-            
+        
+        
+        if verbose is True:
+            print(out)
+        
         doke_df = doke_df.append(
             out,
             ignore_index = True
@@ -110,7 +122,10 @@ def df_plot(
     show_zero = True,
     add_labels = True,
     add_text_inplot = False,
-    ax2 = None
+    ax2 = None,
+    colors = None,
+    marker = ".",
+    **kwargs
 ):
     
     '''
@@ -138,6 +153,10 @@ def df_plot(
     if show_zero is True:
         ax.plot(0, 0, ".", color = "black", alpha = .0)
     
+    if colors is None:
+        colors = [None] * len(doke_df)
+    
+    
     
     if ("label" not in doke_df) and (add_labels is True):
         doke_df["label"] = ""
@@ -153,15 +172,16 @@ def df_plot(
         
         if add_labels:
             label = row["label"]
-        
+        print(i_row)
         color = fhist.errorbar(
             ax,
             x, y, sy,
             sx = sx, plot = True,
             label = label,
-            marker = ".",
-            capsize = 0,
             ax2 = ax2,
+            color = colors[i_row],
+            marker = marker,
+            **kwargs,
         )
         
         if add_text_inplot is True:

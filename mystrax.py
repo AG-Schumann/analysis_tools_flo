@@ -146,6 +146,7 @@ def draw_woa_scatter(
     field_w = "widths",
     colors = False, alpha = .01,
     marker = ".",
+    rasterized = True,
 ):
 
     if ax is False:
@@ -169,6 +170,7 @@ def draw_woa_scatter(
             linestyle = "",
             marker = marker, markeredgewidth = 0,
             alpha = alpha, color = color,
+            rasterized = rasterized
         )
     
     ax.set_xlim(10,1e5)
@@ -672,8 +674,6 @@ def load(
     
     print(f"\n\33[1m{tcol}data is ready\33[0m")
     return(data)
-
-
 
 
 
