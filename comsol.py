@@ -95,7 +95,6 @@ def read_csv(path, unpack_settings = True, explicit_settings = True, clean_names
         
         # merging does not work! all values are the same, wtf....
         for c in sdf.columns:
-            print(c)
             df2[c] = sdf[c].values
     
     
