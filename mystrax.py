@@ -15,20 +15,28 @@ def now():
     return(datetime.now())
 
 mystrax_limporttime = now()
-def age():
-    print(f"strax loaded at {mystrax_limporttime} (age: {now() - mystrax_limporttime})")
 
+def age():
+    print(f"strax loaded from \33[1m{straxpath}\33[0m at {mystrax_limporttime} (age: {now() - mystrax_limporttime})")
 
 
 
 tcol = "\33[36m"
 
+if "straxpath" in os.environ:
+    straxpath = os.environ["straxpath"]
+    print(f"found straxpath envornmental variable: {straxpath}")
+else:
+    straxpath = "/data/workspace/Flo/straxbra_flo"
+
+
 # import 
-sys.path.insert(0,"/data/workspace/Flo/straxbra_flo/strax")
+sys.path.insert(0,f"{straxpath}/strax")
 import strax
 
-sys.path.insert(0,"/data/workspace/Flo/straxbra_flo/straxbra")
+sys.path.insert(0,f"{straxpath}/straxbra")
 import straxbra
+
 
 eff = straxbra.plugins.eff
 context_sp = straxbra.SinglePhaseContext()
@@ -550,7 +558,7 @@ def load(
     v = True,
     correct = True,
     filters = True,
-    fidu_z = False, 
+    fidu_z = False,
     **kwargs
 ):
     '''
@@ -591,6 +599,10 @@ def load(
     
     if isinstance(mconfig, dict):
         config = {**config, **mconfig}
+    
+    if v is True:
+        print("config:")
+        print(config)
     
     
     runs = rs(runs)
@@ -989,10 +1001,10 @@ def draw_kr_event(
                 ax.axvline(event["time_peaks"][peak_i] + t_offset_abs, color = plt_i.get_color())
 
     if PE_ns is True:
-        ax.set_ylabel("signal / PE/ns")
+        ax.set_ylabel("Signal [PE/ns]")
     else:
-        ax.set_ylabel("signal / PE/sample")
-    ax.set_xlabel("time / ns")
+        ax.set_ylabel("Signal [PE/sample]")
+    ax.set_xlabel("Time [ns]")
 
     if leg_loc is not False:
         try:
@@ -1000,15 +1012,29 @@ def draw_kr_event(
         except BaseException as e:
             print(e)
 
-def draw_kr_event_split(ev, title = "", same_xscale = True, show_areas = True, show_decaytime = False):
 
-    fig, axs = fhist.make_fig(1, 2, sharey = True, w = 3)
+
+
+
+def draw_kr_event_split(
+    ev, title = "", evs = False, same_xscale = True, show_areas = True, show_decaytime = False,
+    style_peak_fit = dict(),
+    style_wave_fit = dict(),
+):
+
+    fig, axs = plt.subplots(1, 2, sharey = True)
     ax1, ax2 = axs
     fig.suptitle(f"{title}")
 
 
 
     axl = ax1.twiny()
+    
+    
+    
+    if show_decaytime is True:
+        addlabel(axl, f"decay: {ev['time_decay_s1']:.0f} ns")
+    
     axl.set_axis_off()
 
     if ev["s2_split"]:
@@ -1016,19 +1042,63 @@ def draw_kr_event_split(ev, title = "", same_xscale = True, show_areas = True, s
     else:
         labels = ["first S1", "second S1", "S2"]
 
+        
+    time_S21 = ev["time_signals"][2] - ev["time_signals"][0]
+    
 
-    draw_kr_event(ax1, ev, show_peaks = "0", color = fhist.default_colors[0])
-    draw_kr_event(ax1, ev, show_peaks = "1", color = fhist.default_colors[1])
+    draw_kr_event(ax1, ev, show_peaks = "0", color = fhist.default_colors[0], linewidth = 2)
+    draw_kr_event(ax1, ev, show_peaks = "1", color = fhist.default_colors[1], linewidth = 2)
 
-    draw_kr_event(ax2, ev, show_peaks = "2", color = fhist.default_colors[2])
+    draw_kr_event(ax2, ev, show_peaks = "2", color = fhist.default_colors[2], linewidth = 2)
+    
     if ev["s2_split"]:
-        draw_kr_event(ax2, ev, show_peaks = "3", color = fhist.default_colors[3])
+        draw_kr_event(ax2, ev, show_peaks = "3", color = fhist.default_colors[3], linewidth = 2)
     ax2.get_yaxis().set_visible(False)
 
     
+    if isinstance(evs, np.void) and ("fit" in evs.dtype.names):
+        
+        time_S21 = ev["time_signals"][2] - ev["time_signals"][0]
+        
+        
+        w_s21 = np.sum(ev["data_peaks"][2]!=0) * ev["dt"][2]
+        
+        t_end_s2 = time_S21 + w_s21
+        
+        if ev["s2_split"]:
+            w_s22 = np.sum(ev["data_peaks"][3]!=0) * ev["dt"][3]
+            time_S22 = ev["time_signals"][3] - ev["time_signals"][0]
+            t_end_s2  = time_S22 + w_s22
+
+        xp_s2 = np.linspace(time_S21, t_end_s2, 2000)
+
+
+        fit = evs["fit"]*1
+        
+        fit[0] = fit[0]+time_S21
+        
+        fit_S21 = fit*1
+        fit_S22 = fit*1
+        fit_S21[4] = 0
+        fit_S22[3] = 0
+        
+        y_s21 = eff.sum_gauss(xp_s2, *fit_S21)
+        y_s22 = eff.sum_gauss(xp_s2, *fit_S22)
+        y_s2 = eff.sum_gauss(xp_s2, *fit)
+
+        ax2.plot(xp_s2, y_s21, color = fhist.default_colors[0], **style_peak_fit)
+        ax2.plot(xp_s2, y_s22, color = fhist.default_colors[1], **style_peak_fit)
+        ax2.plot(xp_s2, y_s2, **dict(color = "black", **style_wave_fit))
+        a21 = evs["areas"][2] * np.exp(evs["drifttime"] / 55)
+        a22 = evs["areas"][3] * np.exp(evs["drifttime"] / 55)
+        
+
+        addlabel(axl, f"1 st. S2: {a21:.0f} PE")
+        addlabel(axl, f"2 nd. S2: {a22:.0f} PE")
+    
+    
     
     for peak_i, label, color in enumezip(labels, fhist.default_colors):
-        
         if show_areas is True:
             area = ev[f"area_s{(peak_i>1)+1}{peak_i%2+1}"]
             label = f"{label} ({area:.1f} PE)"
@@ -1058,17 +1128,17 @@ def draw_kr_event_split(ev, title = "", same_xscale = True, show_areas = True, s
     tl1 = ax1.get_xticklabels()
     tl2 = ax2.get_xticklabels()
 
-    for ti in np.nonzero(t1 > m1 + w*.95)[0]:
+    for ti in np.nonzero(t1 > (m1 + w*.8))[0]:
         plt.setp(tl1[ti], visible=False)
-    for ti in np.nonzero(t2 < m2 - w*.95)[0]:
+    for ti in np.nonzero(t2 < (m2 - w*.95))[0]:
         plt.setp(tl2[ti], visible=False)
 
     
     ax1.spines['right'].set_visible(False)
     ax2.spines['left'].set_color("grey")
     
-    axl.legend(loc = "upper left")
-    plt.subplots_adjust(wspace = 0)
+#     axl.legend(loc = "upper left")
+    plt.subplots_adjust(wspace = 0, right=0.99, top = 0.99)
     return(fig, axs)
 
 
